@@ -14,7 +14,7 @@ const Home = () => {
 
   return (
     <main className="flex min-h-screen flex-col items-center p-4">
-      <h1 className="text-3xl font-bold mb-4">Friends Location Map</h1>
+      <h1 className="text-3xl font-bold mb-4">Find your favorite Električka</h1>
       <div className="w-full max-w-4xl">
         <Map />
       </div>
