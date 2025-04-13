@@ -1,6 +1,6 @@
 import { initializeApp, getApps } from 'firebase/app'
 import { getAuth } from 'firebase/auth'
-import { getFirestore } from 'firebase/firestore'
+import { doc, getFirestore, setDoc, Timestamp } from 'firebase/firestore'
 import { getAnalytics } from 'firebase/analytics'
 
 const firebaseConfig = {
@@ -28,4 +28,35 @@ if (typeof window !== 'undefined') {
 const auth = getAuth(app)
 const db = getFirestore(app)
 
-export { app, auth, db, analytics }
+type UserEntry = {
+  displayName: string | null
+  email: string | null
+  photoURL: string | null
+  lastLogin: Timestamp | null
+}
+
+type LocationEntry = {
+  city: string
+  country: string
+}
+
+type WriteToFirestoreType = {
+  collection: string
+  docId: string
+  data: UserEntry | LocationEntry
+}
+
+const writeToFirestore = async ({
+  collection,
+  docId,
+  data,
+}: WriteToFirestoreType) => {
+  try {
+    await setDoc(doc(db, collection, docId), data, { merge: true })
+    console.log('Data written to Firestore', data)
+  } catch (error) {
+    console.error('Error writing user data to Firestore:', error)
+  }
+}
+
+export { app, auth, db, writeToFirestore, analytics }

@@ -15,8 +15,8 @@ import {
   signOut,
   signInWithPopup,
 } from 'firebase/auth'
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore'
-import { auth, db } from '@/lib/firebase'
+import { auth, writeToFirestore } from '@/lib/firebase'
+import { serverTimestamp, Timestamp } from 'firebase/firestore'
 
 interface AuthContextType {
   user: User | null
@@ -38,16 +38,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       // Only write user data if this is a new sign-in
       if (user && sessionStorage.getItem('isNewSignIn') === 'true') {
         try {
-          await setDoc(
-            doc(db, 'users', user.uid),
-            {
+          await writeToFirestore({
+            collection: 'users',
+            docId: user.uid,
+            data: {
               displayName: user.displayName,
               email: user.email,
               photoURL: user.photoURL,
-              lastLogin: serverTimestamp(),
+              lastLogin: serverTimestamp() as unknown as Timestamp,
             },
-            { merge: true }
-          )
+          })
           // Clear the flag after successful write
           sessionStorage.removeItem('isNewSignIn')
         } catch (error) {
