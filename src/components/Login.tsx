@@ -1,17 +1,27 @@
 // src/components/Login.tsx
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useAuth } from '@/lib/AuthContext'
 import GoogleButton from 'react-google-button'
+import { useRouter } from 'next/navigation'
 
 const Login = () => {
   const [error, setError] = useState('')
-  const { signInWithGoogle } = useAuth()
+  const [isSignedIn, setIsSignedIn] = useState(false)
+  const { signInWithGoogle, user } = useAuth()
+  const router = useRouter()
+
+  useEffect(() => {
+    if (isSignedIn && user) {
+      router.push('/')
+    }
+  }, [isSignedIn, user, router])
 
   const handleGoogleSignIn = async () => {
     try {
       await signInWithGoogle()
+      setIsSignedIn(true)
     } catch (err) {
       setError(
         err instanceof Error ? err.message : 'An unexpected error occurred'
