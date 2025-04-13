@@ -11,9 +11,9 @@ import {
 import {
   User,
   onAuthStateChanged,
-  signInWithPopup,
   GoogleAuthProvider,
   signOut,
+  signInWithPopup,
 } from 'firebase/auth'
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore'
 import { auth, db } from '@/lib/firebase'
