@@ -1,11 +1,11 @@
 'use client'
 
+import Link from 'next/link'
 import React from 'react'
 import { twMerge } from 'tailwind-merge'
 
-import { useAuth } from '@/lib/AuthContext'
 import Container from '@/components/Container'
-import Link from 'next/link'
+import { useAuth } from '@/lib/AuthContext'
 
 type Props = {
   classname?: string

@@ -1,6 +1,7 @@
+import React, { ReactNode } from 'react'
+
 import Container from '@/components/Container'
 import NavBar from '@/components/NavBar'
-import React, { ReactNode } from 'react'
 
 const PageWrapper = ({ children }: { children: ReactNode }) => {
   return (

@@ -1,7 +1,7 @@
-import { initializeApp, getApps } from 'firebase/app'
+import { getAnalytics } from 'firebase/analytics'
+import { getApps, initializeApp } from 'firebase/app'
 import { getAuth } from 'firebase/auth'
 import { doc, getFirestore, setDoc, Timestamp } from 'firebase/firestore'
-import { getAnalytics } from 'firebase/analytics'
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -62,4 +62,4 @@ const writeToFirestore = async ({
   }
 }
 
-export { app, auth, db, writeToFirestore, analytics }
+export { analytics, app, auth, db, writeToFirestore }

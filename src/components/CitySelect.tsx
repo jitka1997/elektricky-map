@@ -1,9 +1,10 @@
 import React, { useState } from 'react'
 import Select from 'react-select'
+
 import Container from '@/components/Container'
-import { getNearestCity } from '@/lib/utils/getNearestCity'
 import { useAuth } from '@/lib/AuthContext'
 import { writeToFirestore } from '@/lib/firebase'
+import { getNearestCity } from '@/lib/utils/getNearestCity'
 
 interface CityOption {
   value: string

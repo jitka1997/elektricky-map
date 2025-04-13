@@ -1,13 +1,14 @@
 // src/app/page.tsx
 'use client'
 
-import { useAuth } from '@/lib/AuthContext'
 import dynamic from 'next/dynamic'
-import { TITLE } from '@/lib/constants'
 import { useRouter } from 'next/navigation'
 import { useEffect } from 'react'
-import Container from '@/components/Container'
+
 import { LocationSelect } from '@/components/CitySelect'
+import Container from '@/components/Container'
+import { useAuth } from '@/lib/AuthContext'
+import { TITLE } from '@/lib/constants'
 
 const MapWithNoSSR = dynamic(() => import('@/components/Map'), {
   loading: () => (

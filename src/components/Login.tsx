@@ -1,10 +1,11 @@
 // src/components/Login.tsx
 'use client'
 
-import { useEffect, useState } from 'react'
-import { useAuth } from '@/lib/AuthContext'
-import GoogleButton from 'react-google-button'
 import { useRouter } from 'next/navigation'
+import { useEffect, useState } from 'react'
+import GoogleButton from 'react-google-button'
+
+import { useAuth } from '@/lib/AuthContext'
 
 const Login = () => {
   const [error, setError] = useState('')

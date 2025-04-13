@@ -1,9 +1,10 @@
 'use client'
 
-import { useState } from 'react'
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
+
 import L from 'leaflet'
+import { useState } from 'react'
+import { MapContainer, Marker, Popup, TileLayer, useMap } from 'react-leaflet'
 
 // Define custom icon
 const customIcon = new L.Icon({

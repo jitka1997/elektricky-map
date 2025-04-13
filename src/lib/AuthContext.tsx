@@ -2,21 +2,22 @@
 'use client'
 
 import {
-  createContext,
-  useContext,
-  useState,
-  useEffect,
-  ReactNode,
-} from 'react'
-import {
-  User,
-  onAuthStateChanged,
   GoogleAuthProvider,
-  signOut,
+  onAuthStateChanged,
   signInWithPopup,
+  signOut,
+  User,
 } from 'firebase/auth'
-import { auth, writeToFirestore } from '@/lib/firebase'
 import { serverTimestamp, Timestamp } from 'firebase/firestore'
+import {
+  createContext,
+  ReactNode,
+  useContext,
+  useEffect,
+  useState,
+} from 'react'
+
+import { auth, writeToFirestore } from '@/lib/firebase'
 
 interface AuthContextType {
   user: User | null
