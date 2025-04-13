@@ -17,7 +17,7 @@ const NavBar = ({ classname }: Props) => {
   return (
     <div
       className={twMerge(
-        'fixed left-0 top-0 z-10 flex w-full bg-white print:hidden',
+        'fixed top-0 left-0 z-10 flex w-full bg-white print:hidden',
         classname
       )}
     >

@@ -139,10 +139,10 @@ const LocationSelect: React.FC = () => {
       </Container>
       {isLoading && <div className="text-gray-500">Loading...</div>}
 
-      {error && <div className="text-red-500 text-sm">{error}</div>}
+      {error && <div className="text-sm text-red-500">{error}</div>}
 
       {selectedCity && (
-        <Container className="gap-4 bg-gray-100 rounded-md flex justify-between items-center py-4">
+        <Container className="flex items-center justify-between gap-4 rounded-md bg-gray-100 py-4">
           <div className="flex flex-col gap-2">
             <h2 className="font-bold">Selected Location:</h2>
             <p>

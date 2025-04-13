@@ -11,7 +11,7 @@ import { LocationSelect } from '@/components/CitySelect'
 
 const MapWithNoSSR = dynamic(() => import('@/components/Map'), {
   loading: () => (
-    <div className="h-[500px] flex items-center justify-center bg-gray-100">
+    <div className="flex h-[500px] items-center justify-center bg-gray-100">
       Loading map...
     </div>
   ),
@@ -39,7 +39,7 @@ const Home = () => {
   return (
     <main className="flex min-h-screen flex-col items-center p-4">
       <div className="w-full max-w-6xl">
-        <div className="flex justify-between items-center mb-6">
+        <div className="mb-6 flex items-center justify-between">
           <h1 className="text-3xl font-bold">{TITLE}</h1>
         </div>
         <Container className="flex flex-col gap-4">

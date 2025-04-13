@@ -50,14 +50,14 @@ const LocationMarker = () => {
 
   return (
     <>
-      <div className="absolute bottom-4 right-4 z-[1000]">
+      <div className="absolute right-4 bottom-4 z-[1000]">
         <button
           onClick={findLocation}
-          className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
+          className="rounded bg-blue-500 px-4 py-2 font-bold text-white hover:bg-blue-700"
         >
           Find My Location
         </button>
-        {error && <div className="text-red-500 mt-2">{error}</div>}
+        {error && <div className="mt-2 text-red-500">{error}</div>}
       </div>
 
       {position && (
@@ -74,7 +74,7 @@ const LocationMarker = () => {
 
 const Map = () => {
   return (
-    <div className="h-[500px] w-full relative">
+    <div className="relative h-[500px] w-full">
       <MapContainer
         center={[20, 0]}
         zoom={2}

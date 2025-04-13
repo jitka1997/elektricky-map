@@ -30,11 +30,11 @@ const Login = () => {
   }
 
   return (
-    <div className="w-full max-w-md mx-auto p-6 bg-white rounded-lg shadow-md">
-      <h2 className="text-2xl font-bold mb-6">Sign In</h2>
+    <div className="mx-auto w-full max-w-md rounded-lg bg-white p-6 shadow-md">
+      <h2 className="mb-6 text-2xl font-bold">Sign In</h2>
 
       {error && (
-        <div className="bg-red-100 text-red-700 p-3 rounded mb-4">{error}</div>
+        <div className="mb-4 rounded bg-red-100 p-3 text-red-700">{error}</div>
       )}
 
       <GoogleButton onClick={async () => handleGoogleSignIn()} />
