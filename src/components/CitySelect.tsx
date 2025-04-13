@@ -1,15 +1,18 @@
+import { serverTimestamp, Timestamp } from 'firebase/firestore'
 import React, { useState } from 'react'
 import Select from 'react-select'
 
 import Container from '@/components/Container'
 import { useAuth } from '@/lib/AuthContext'
 import { writeToFirestore } from '@/lib/firebase'
-import { getNearestCity } from '@/lib/utils/getNearestCity'
+import { getNearestCity } from '@/lib/utils'
 
 interface CityOption {
   value: string
   label: string
   country: string
+  latitude: number
+  longitude: number
   state?: string
 }
 
@@ -23,16 +26,42 @@ interface CitySelectProps {
 const CitySelect: React.FC<CitySelectProps> = ({ onChange, value }) => {
   // TODO: Fetch city options from somewhere
   const cityOptions: CityOption[] = [
-    { value: 'london', label: 'London', country: 'United Kingdom' },
+    {
+      value: 'london',
+      label: 'London',
+      country: 'United Kingdom',
+      latitude: 51.5074,
+      longitude: -0.1278,
+    },
     {
       value: 'new-york',
       label: 'New York',
       country: 'United States',
       state: 'NY',
+      latitude: 40.7128,
+      longitude: -74.006,
     },
-    { value: 'tokyo', label: 'Tokyo', country: 'Japan' },
-    { value: 'paris', label: 'Paris', country: 'France' },
-    { value: 'berlin', label: 'Berlin', country: 'Germany' },
+    {
+      value: 'tokyo',
+      label: 'Tokyo',
+      country: 'Japan',
+      latitude: 35.682839,
+      longitude: 139.759455,
+    },
+    {
+      value: 'paris',
+      label: 'Paris',
+      country: 'France',
+      latitude: 48.8566,
+      longitude: 2.3522,
+    },
+    {
+      value: 'berlin',
+      label: 'Berlin',
+      country: 'Germany',
+      latitude: 52.52,
+      longitude: 13.405,
+    },
   ]
 
   return (
@@ -72,7 +101,9 @@ const LocationSelect: React.FC = () => {
           userId: user.uid,
           city: selectedCity.value,
           country: selectedCity.country,
-          createdAt: new Date(),
+          latitude: selectedCity.latitude,
+          longitude: selectedCity.longitude,
+          createdAt: serverTimestamp() as unknown as Timestamp,
         },
       })
     } catch (error) {
@@ -109,6 +140,8 @@ const LocationSelect: React.FC = () => {
         label: cityInfo.name,
         country: cityInfo.country,
         state: cityInfo.state,
+        latitude: latitude,
+        longitude: longitude,
       }
 
       setSelectedCity(cityOption)
@@ -122,7 +155,7 @@ const LocationSelect: React.FC = () => {
 
   return (
     <>
-      <Container className="flex items-center justify-center gap-4">
+      <Container className="flex items-center justify-center gap-4 pl-0">
         <CitySelect
           label="Your City"
           value={selectedCity}
@@ -152,6 +185,7 @@ const LocationSelect: React.FC = () => {
               {selectedCity.country}
             </p>
           </div>
+          {/* // TODO: hide until next location is selected */}
           <button
             onClick={submitLocationToFirestore}
             disabled={!selectedCity}

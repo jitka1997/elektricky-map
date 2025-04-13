@@ -26,11 +26,21 @@ const NavBar = ({ classname }: Props) => {
           <Link href={'/login'}>Login</Link>
           <Link href={'/login'}>Nieco ine</Link>
         </div>
-        <div className="text-large flex items-center gap-8 font-semibold">
+        <div className="text-large flex items-center gap-4 font-semibold">
           <span className="text-gray-700">
             {user?.displayName || user?.email}
           </span>
-          <button onClick={() => logout()} className="btn btn-error">
+          {user?.photoURL && (
+            <div className="h-8 w-8 overflow-hidden rounded-full border border-gray-200">
+              <img
+                src={user.photoURL}
+                alt="Profile"
+                className="h-full w-full object-cover"
+                referrerPolicy="no-referrer"
+              />
+            </div>
+          )}
+          <button onClick={() => logout()} className="btn btn-error btn-small">
             Logout
           </button>
         </div>

@@ -6,27 +6,46 @@ import L from 'leaflet'
 import { useState } from 'react'
 import { MapContainer, Marker, Popup, TileLayer, useMap } from 'react-leaflet'
 
-// Define custom icon
-const customIcon = new L.Icon({
-  iconUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon.png',
-  iconRetinaUrl:
-    'https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon-2x.png',
-  shadowUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png',
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
-  shadowSize: [41, 41],
-})
+import { LocationData } from '@/app/page'
 
-// Define the type for our location
-interface Location {
-  latitude: number
-  longitude: number
+// Function to create custom icon from user's photo URL
+const createUserIcon = (photoURL: string | null) => {
+  // Use default icon if no photo URL is provided
+  if (!photoURL) {
+    return new L.Icon({
+      iconUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon.png',
+      iconRetinaUrl:
+        'https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon-2x.png',
+      shadowUrl:
+        'https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png',
+      iconSize: [25, 41],
+      iconAnchor: [12, 41],
+      popupAnchor: [1, -34],
+      shadowSize: [41, 41],
+    })
+  }
+
+  // Create an HTML element for the custom icon
+  const iconHtml = document.createElement('div')
+  iconHtml.style.backgroundImage = `url(${photoURL})`
+  iconHtml.style.backgroundSize = 'cover'
+  iconHtml.style.width = '40px'
+  iconHtml.style.height = '40px'
+  iconHtml.style.borderRadius = '50%'
+  iconHtml.style.border = '2px solid gray'
+  iconHtml.style.boxShadow = '0 1px 3px rgba(0,0,0,0.3)'
+
+  // Create a divIcon instead of a standard icon
+  return L.divIcon({
+    html: iconHtml,
+    className: 'user-photo-icon',
+    iconSize: [40, 40],
+    iconAnchor: [20, 40],
+    popupAnchor: [0, -40],
+  })
 }
 
-// This component has access to the map context and can place markers
 const LocationMarker = () => {
-  const [position, setPosition] = useState<Location | null>(null)
   const [error, setError] = useState<string | null>(null)
   const map = useMap()
 
@@ -37,7 +56,6 @@ const LocationMarker = () => {
       navigator.geolocation.getCurrentPosition(
         (position) => {
           const { latitude, longitude } = position.coords
-          setPosition({ latitude, longitude })
           map.flyTo([latitude, longitude], 13)
         },
         (error) => {
@@ -51,29 +69,24 @@ const LocationMarker = () => {
 
   return (
     <>
-      <div className="absolute right-4 bottom-4 z-[1000]">
+      <div className="absolute top-2 right-2 z-[1000]">
         <button
           onClick={findLocation}
-          className="rounded bg-blue-500 px-4 py-2 font-bold text-white hover:bg-blue-700"
+          className="btn btn-primary btn-xs rounded-full"
         >
-          Find My Location
+          My Location
         </button>
         {error && <div className="mt-2 text-red-500">{error}</div>}
       </div>
-
-      {position && (
-        <Marker
-          position={[position.latitude, position.longitude]}
-          icon={customIcon}
-        >
-          <Popup>You are here</Popup>
-        </Marker>
-      )}
     </>
   )
 }
 
-const Map = () => {
+interface MapProps {
+  locationData?: LocationData[]
+}
+
+const Map = ({ locationData = [] }: MapProps) => {
   return (
     <div className="relative h-[500px] w-full">
       <MapContainer
@@ -87,6 +100,32 @@ const Map = () => {
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
         <LocationMarker />
+        {/* Add markers for each user's last position */}
+        {locationData.map((userData) => {
+          // Check if userData.locations is empty
+          if (!userData.locations || userData.locations.length === 0) {
+            return null
+          }
+          const lastLocation = userData.locations[0]
+          return (
+            <Marker
+              key={userData.userId}
+              position={[lastLocation.latitude, lastLocation.longitude]}
+              icon={createUserIcon(userData.photoURL)}
+            >
+              <Popup>
+                <div className="flex flex-col items-center">
+                  <div>
+                    {lastLocation.city}, {lastLocation.country}
+                  </div>
+                  <div className="text-xs text-gray-500">
+                    Last seen: {lastLocation.createdAt.toLocaleString()}
+                  </div>
+                </div>
+              </Popup>
+            </Marker>
+          )
+        })}
       </MapContainer>
     </div>
   )

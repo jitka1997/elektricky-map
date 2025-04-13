@@ -1,7 +1,17 @@
 import { getAnalytics } from 'firebase/analytics'
 import { getApps, initializeApp } from 'firebase/app'
 import { getAuth } from 'firebase/auth'
-import { doc, getFirestore, setDoc, Timestamp } from 'firebase/firestore'
+import {
+  collection,
+  doc,
+  getDocs,
+  getFirestore,
+  orderBy,
+  query,
+  setDoc,
+  Timestamp,
+  where,
+} from 'firebase/firestore'
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -40,7 +50,9 @@ export type LocationEntry = {
   userId: string
   city: string
   country: string
-  createdAt: Date
+  latitude: number
+  longitude: number
+  createdAt: Date | Timestamp
 }
 
 type WriteToFirestoreType = {
@@ -62,4 +74,83 @@ const writeToFirestore = async ({
   }
 }
 
-export { analytics, app, auth, db, writeToFirestore }
+async function getUserLocations(userId: string) {
+  try {
+    // Create a reference to the locations collection
+    const locationsRef = collection(db, 'locations')
+
+    // Create a query against the collection
+    const q = query(
+      locationsRef,
+      where('userId', '==', userId),
+      orderBy('createdAt', 'desc')
+    )
+
+    const querySnapshot = await getDocs(q)
+
+    // Map the results to your LocationEntry type
+    const locations: LocationEntry[] = []
+    querySnapshot.forEach((doc) => {
+      const data = doc.data()
+      locations.push({
+        userId: data.userId,
+        city: data.city,
+        country: data.country,
+        latitude: data.latitude,
+        longitude: data.longitude,
+        createdAt: data.createdAt.toDate(),
+      })
+    })
+
+    return locations
+  } catch (error) {
+    console.error('Error fetching user locations:', error)
+    throw error
+  }
+}
+
+async function getAllUsers() {
+  try {
+    // Create a reference to the users collection
+    const usersRef = collection(db, 'users')
+
+    // Create a query against the collection
+    const q = query(usersRef, orderBy('lastLogin', 'desc'))
+
+    const querySnapshot = await getDocs(q)
+
+    // Map the results to your UserEntry type
+    const users: UserEntry[] = []
+    querySnapshot.forEach((doc) => {
+      const data = doc.data()
+      users.push({
+        userId: data.userId,
+        displayName: data.displayName,
+        email: data.email,
+        photoURL: data.photoURL,
+        lastLogin: data.lastLogin,
+      })
+    })
+
+    return users
+  } catch (error) {
+    console.error('Error fetching all users:', error)
+    throw error
+  }
+}
+
+async function getAllLocations() {
+  const users = await getAllUsers()
+  const allLocations = users.map(async (user) => {
+    const locations = await getUserLocations(user.userId)
+    return {
+      userId: user.userId,
+      photoURL: user.photoURL,
+      lastLogin: user.lastLogin,
+      locations,
+    }
+  })
+  return allLocations
+}
+
+export { analytics, app, auth, db, getAllLocations, writeToFirestore }

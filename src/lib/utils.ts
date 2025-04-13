@@ -41,7 +41,3 @@ export async function getNearestCity(latitude: number, longitude: number) {
     return null
   }
 }
-
-// Example usage:
-// const cityInfo = await getNearestCity(40.7128, -74.0060);
-// console.log(cityInfo); // { name: "New York", state: "New York", country: "United States" }
