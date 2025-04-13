@@ -29,15 +29,18 @@ const auth = getAuth(app)
 const db = getFirestore(app)
 
 type UserEntry = {
+  userId: string
   displayName: string | null
   email: string | null
   photoURL: string | null
   lastLogin: Timestamp | null
 }
 
-type LocationEntry = {
+export type LocationEntry = {
+  userId: string
   city: string
   country: string
+  createdAt: Date
 }
 
 type WriteToFirestoreType = {

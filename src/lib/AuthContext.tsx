@@ -42,6 +42,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             collection: 'users',
             docId: user.uid,
             data: {
+              userId: user.uid,
               displayName: user.displayName,
               email: user.email,
               photoURL: user.photoURL,

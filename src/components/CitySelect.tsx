@@ -2,6 +2,8 @@ import React, { useState } from 'react'
 import Select from 'react-select'
 import Container from '@/components/Container'
 import { getNearestCity } from '@/lib/utils/getNearestCity'
+import { useAuth } from '@/lib/AuthContext'
+import { writeToFirestore } from '@/lib/firebase'
 
 interface CityOption {
   value: string
@@ -50,10 +52,32 @@ const LocationSelect: React.FC = () => {
   const [selectedCity, setSelectedCity] = useState<CityOption | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const { user } = useAuth()
 
   const handleCityChange = (city: CityOption | null) => {
     setSelectedCity(city)
-    // TODO: write to DB or something
+    console.log('Selected city:', city)
+  }
+
+  const submitLocationToFirestore = async () => {
+    try {
+      if (!user) throw new Error('User not authenticated')
+      if (!selectedCity) throw new Error('No city selected')
+
+      await writeToFirestore({
+        collection: 'locations',
+        docId: `${user.uid}_${Date.now()}`,
+        data: {
+          userId: user.uid,
+          city: selectedCity.value,
+          country: selectedCity.country,
+          createdAt: new Date(),
+        },
+      })
+    } catch (error) {
+      console.error('Error writing location to Firestore:', error)
+      setError('Failed to save location')
+    }
   }
 
   const findCityByGeolocation = async () => {
@@ -86,7 +110,6 @@ const LocationSelect: React.FC = () => {
         state: cityInfo.state,
       }
 
-      // Update the selected city
       setSelectedCity(cityOption)
     } catch (err) {
       console.error('Error finding location:', err)
@@ -109,9 +132,9 @@ const LocationSelect: React.FC = () => {
         <button
           onClick={findCityByGeolocation}
           disabled={isLoading}
-          className="bg-blue-500 text-white rounded-md hover:bg-blue-600 disabled:bg-blue-300"
+          className="btn btn-primary"
         >
-          {isLoading ? 'Finding location...' : 'Use My Location'}
+          {isLoading ? 'Finding location...' : 'Get My Location'}
         </button>
       </Container>
       {isLoading && <div className="text-gray-500">Loading...</div>}
@@ -119,13 +142,22 @@ const LocationSelect: React.FC = () => {
       {error && <div className="text-red-500 text-sm">{error}</div>}
 
       {selectedCity && (
-        <Container className="bg-gray-50 p-4 rounded-md">
-          <h2 className="font-medium">Selected Location:</h2>
-          <p>
-            {selectedCity.label},{' '}
-            {selectedCity.state && `${selectedCity.state}, `}
-            {selectedCity.country}
-          </p>
+        <Container className="gap-4 bg-gray-100 rounded-md flex justify-between items-center py-4">
+          <div className="flex flex-col gap-2">
+            <h2 className="font-bold">Selected Location:</h2>
+            <p>
+              {selectedCity.label},{' '}
+              {selectedCity.state && `${selectedCity.state}, `}
+              {selectedCity.country}
+            </p>
+          </div>
+          <button
+            onClick={submitLocationToFirestore}
+            disabled={!selectedCity}
+            className="btn btn-primary"
+          >
+            Upload Location
+          </button>
         </Container>
       )}
     </>

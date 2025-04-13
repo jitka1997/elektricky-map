@@ -30,10 +30,7 @@ const NavBar = ({ classname }: Props) => {
           <span className="text-gray-700">
             {user?.displayName || user?.email}
           </span>
-          <button
-            onClick={() => logout()}
-            className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded"
-          >
+          <button onClick={() => logout()} className="btn btn-error">
             Logout
           </button>
         </div>
