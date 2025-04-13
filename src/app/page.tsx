@@ -4,7 +4,6 @@
 import { useAuth } from '@/lib/AuthContext'
 import Login from '@/components/Login'
 import dynamic from 'next/dynamic'
-import { auth } from '@/lib/firebase'
 
 const TITLE = 'Find your favorite Električka'
 
@@ -18,7 +17,7 @@ const MapWithNoSSR = dynamic(() => import('@/components/Map'), {
 })
 
 const Home = () => {
-  const { user, loading } = useAuth()
+  const { user, loading, logout } = useAuth()
 
   if (loading) {
     return (
@@ -45,7 +44,7 @@ const Home = () => {
           <div>
             <span className="mr-3">{user.displayName || user.email}</span>
             <button
-              onClick={() => auth.signOut()}
+              onClick={() => logout()}
               className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded"
             >
               Logout

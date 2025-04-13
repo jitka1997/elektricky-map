@@ -32,8 +32,29 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setUser(user)
+
+      // Only write user data if this is a new sign-in
+      if (user && sessionStorage.getItem('isNewSignIn') === 'true') {
+        try {
+          await setDoc(
+            doc(db, 'users', user.uid),
+            {
+              displayName: user.displayName,
+              email: user.email,
+              photoURL: user.photoURL,
+              lastLogin: serverTimestamp(),
+            },
+            { merge: true }
+          )
+          // Clear the flag after successful write
+          sessionStorage.removeItem('isNewSignIn')
+        } catch (error) {
+          console.error('Error writing user data:', error)
+        }
+      }
+
       setLoading(false)
     })
 
@@ -41,23 +62,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, [])
 
   const signInWithGoogle = async () => {
-    const provider = new GoogleAuthProvider()
-    const result = await signInWithPopup(auth, provider)
-
-    await setDoc(
-      doc(db, 'users', result.user.uid),
-      {
-        displayName: result.user.displayName,
-        email: result.user.email,
-        photoURL: result.user.photoURL,
-        lastLogin: serverTimestamp(),
-      },
-      { merge: true }
-    )
+    try {
+      const provider = new GoogleAuthProvider()
+      // Set a flag to indicate this is a new sign-in
+      sessionStorage.setItem('isNewSignIn', 'true')
+      await signInWithPopup(auth, provider)
+      console.log('USER SIGNED IN', auth.currentUser)
+    } catch (error) {
+      console.error('Error signing in with Google:', error)
+      sessionStorage.removeItem('isNewSignIn')
+    }
   }
 
   const logout = async () => {
+    console.log('SIGNING OUT', auth.currentUser)
     await signOut(auth)
+    setUser(null)
   }
 
   return (
