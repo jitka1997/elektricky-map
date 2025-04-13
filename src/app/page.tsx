@@ -6,6 +6,8 @@ import dynamic from 'next/dynamic'
 import { TITLE } from '@/lib/constants'
 import { useRouter } from 'next/navigation'
 import { useEffect } from 'react'
+import Container from '@/components/Container'
+import { LocationSelect } from '@/components/CitySelect'
 
 const MapWithNoSSR = dynamic(() => import('@/components/Map'), {
   loading: () => (
@@ -40,7 +42,10 @@ const Home = () => {
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-3xl font-bold">{TITLE}</h1>
         </div>
-        <MapWithNoSSR />
+        <Container className="flex flex-col gap-4">
+          <MapWithNoSSR />
+          <LocationSelect />
+        </Container>
       </div>
     </main>
   )
