@@ -96,7 +96,7 @@ const LocationSelect: React.FC = () => {
 
       await writeToFirestore({
         collection: 'locations',
-        docId: `${user.uid}_${Date.now()}`,
+        docId: user.uid,
         data: {
           userId: user.uid,
           city: selectedCity.value,
