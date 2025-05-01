@@ -56,7 +56,7 @@ const LocationMarker = () => {
       navigator.geolocation.getCurrentPosition(
         (position) => {
           const { latitude, longitude } = position.coords
-          map.flyTo([latitude, longitude], 13)
+          map.flyTo([latitude, longitude], 5)
         },
         (error) => {
           setError(`Location error: ${error.message}`)
@@ -74,7 +74,7 @@ const LocationMarker = () => {
           onClick={findLocation}
           className="btn btn-primary btn-xs rounded-full"
         >
-          My Location
+          Fly to my location
         </button>
         {error && <div className="mt-2 text-red-500">{error}</div>}
       </div>
