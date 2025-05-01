@@ -1,16 +1,13 @@
-// src/app/page.tsx
 'use client'
 
-import { Timestamp } from 'firebase/firestore'
 import dynamic from 'next/dynamic'
 import { useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 
 import { LocationSelect } from '@/components/CitySelect'
 import Container from '@/components/Container'
 import { useAuth } from '@/lib/AuthContext'
 import { TITLE } from '@/lib/constants'
-import { getAllLocations, LocationEntry } from '@/lib/firebase'
 
 const MapWithNoSSR = dynamic(() => import('@/components/Map'), {
   loading: () => (
@@ -21,18 +18,9 @@ const MapWithNoSSR = dynamic(() => import('@/components/Map'), {
   ssr: false,
 })
 
-export interface LocationData {
-  userId: string
-  photoURL: string | null
-  lastLogin: Timestamp | null
-  locations: LocationEntry[]
-}
-
 const Home = () => {
   const { user, loading } = useAuth()
   const router = useRouter()
-  const [locationData, setLocationData] = useState<LocationData[]>([])
-  const [loadingLocationData, setLoadingLocationData] = useState(true)
 
   useEffect(() => {
     if (!loading && !user) {
@@ -40,25 +28,7 @@ const Home = () => {
     }
   }, [loading, user, router])
 
-  useEffect(() => {
-    async function fetchData() {
-      try {
-        setLoadingLocationData(true)
-        const locationsPromises = await getAllLocations()
-        // Resolve all the promises from map
-        const resolvedLocations = await Promise.all(locationsPromises)
-        setLocationData(resolvedLocations)
-      } catch (error) {
-        console.error('Error fetching locations:', error)
-      } finally {
-        setLoadingLocationData(false)
-      }
-    }
-
-    fetchData()
-  }, [])
-
-  if (loadingLocationData || loading || !user) {
+  if (loading || !user) {
     return (
       <div className="flex h-screen items-center justify-center">
         Loading...
@@ -73,7 +43,7 @@ const Home = () => {
           <h1 className="text-3xl font-bold">{TITLE}</h1>
         </div>
         <Container className="flex flex-col gap-4">
-          <MapWithNoSSR locationData={locationData} />
+          <MapWithNoSSR />
           <LocationSelect />
         </Container>
       </div>

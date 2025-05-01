@@ -6,7 +6,7 @@ import L from 'leaflet'
 import { useState } from 'react'
 import { MapContainer, Marker, Popup, TileLayer, useMap } from 'react-leaflet'
 
-import { LocationData } from '@/app/page'
+import { useLocations } from '@/lib/LocationContext'
 
 // Function to create custom icon from user's photo URL
 const createUserIcon = (photoURL: string | null) => {
@@ -82,11 +82,17 @@ const LocationMarker = () => {
   )
 }
 
-interface MapProps {
-  locationData?: LocationData[]
-}
+const Map = () => {
+  const { locationData, isLoading } = useLocations()
 
-const Map = ({ locationData = [] }: MapProps) => {
+  if (isLoading) {
+    return (
+      <div className="relative flex h-[500px] w-full items-center justify-center bg-gray-100">
+        Loading map data...
+      </div>
+    )
+  }
+
   return (
     <div className="relative h-[500px] w-full">
       <MapContainer

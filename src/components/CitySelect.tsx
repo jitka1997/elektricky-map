@@ -4,6 +4,7 @@ import React, { useState } from 'react'
 import Container from '@/components/Container'
 import { useAuth } from '@/lib/AuthContext'
 import { writeToFirestore } from '@/lib/firebase'
+import { useLocations } from '@/lib/LocationContext'
 import { getCityCoordinates, getNearestCity } from '@/lib/utils'
 
 interface CityOption {
@@ -20,6 +21,7 @@ const LocationSelect: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const { user } = useAuth()
+  const { refreshLocations } = useLocations()
 
   const submitLocationToFirestore = async () => {
     try {
@@ -39,6 +41,7 @@ const LocationSelect: React.FC = () => {
         },
       })
 
+      await refreshLocations()
       setNewCityFound(false)
     } catch (error) {
       console.error('Error writing location to Firestore:', error)
