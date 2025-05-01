@@ -15,7 +15,13 @@ const PageWrapper = ({ children }: { children: ReactNode }) => {
       </main>
       <footer>
         <Container className="py-4 text-center">
-          <p className="text-sm text-gray-500">
+          <p className="flex flex-col justify-center text-sm text-gray-500">
+            <a
+              href="https://www.flaticon.com/free-icons/tram"
+              title="tram icons"
+            >
+              Tram icon created by Freepik - Flaticon
+            </a>
             &copy; {new Date().getFullYear()} Made with love
           </p>
         </Container>

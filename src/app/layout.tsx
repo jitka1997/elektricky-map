@@ -28,6 +28,20 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" data-theme="caramellatte">
+      <head>
+        <link
+          rel="icon"
+          type="image/png"
+          sizes="16x16"
+          href="/favicon.16x16png"
+        />
+        <link
+          rel="icon"
+          type="image/png"
+          sizes="32x32"
+          href="/favicon-32x32.png"
+        />
+      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
