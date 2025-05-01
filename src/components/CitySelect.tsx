@@ -1,93 +1,25 @@
 import { serverTimestamp, Timestamp } from 'firebase/firestore'
 import React, { useState } from 'react'
-import Select from 'react-select'
 
 import Container from '@/components/Container'
 import { useAuth } from '@/lib/AuthContext'
 import { writeToFirestore } from '@/lib/firebase'
-import { getNearestCity } from '@/lib/utils'
+import { getCityCoordinates, getNearestCity } from '@/lib/utils'
 
 interface CityOption {
-  value: string
-  label: string
+  city: string
   country: string
   latitude: number
   longitude: number
   state?: string
 }
 
-interface CitySelectProps {
-  label?: string
-  onChange?: (option: CityOption | null) => void
-  value?: CityOption | null
-  required?: boolean
-}
-
-const CitySelect: React.FC<CitySelectProps> = ({ onChange, value }) => {
-  // TODO: Fetch city options from somewhere
-  const cityOptions: CityOption[] = [
-    {
-      value: 'london',
-      label: 'London',
-      country: 'United Kingdom',
-      latitude: 51.5074,
-      longitude: -0.1278,
-    },
-    {
-      value: 'new-york',
-      label: 'New York',
-      country: 'United States',
-      state: 'NY',
-      latitude: 40.7128,
-      longitude: -74.006,
-    },
-    {
-      value: 'tokyo',
-      label: 'Tokyo',
-      country: 'Japan',
-      latitude: 35.682839,
-      longitude: 139.759455,
-    },
-    {
-      value: 'paris',
-      label: 'Paris',
-      country: 'France',
-      latitude: 48.8566,
-      longitude: 2.3522,
-    },
-    {
-      value: 'berlin',
-      label: 'Berlin',
-      country: 'Germany',
-      latitude: 52.52,
-      longitude: 13.405,
-    },
-  ]
-
-  return (
-    <Select
-      options={cityOptions}
-      value={value}
-      onChange={(selected) =>
-        onChange && onChange(selected as CityOption | null)
-      }
-      placeholder="Select a city..."
-      className="w-full"
-      isClearable
-    />
-  )
-}
-
 const LocationSelect: React.FC = () => {
   const [selectedCity, setSelectedCity] = useState<CityOption | null>(null)
+  const [newCityFound, setNewCityFound] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const { user } = useAuth()
-
-  const handleCityChange = (city: CityOption | null) => {
-    setSelectedCity(city)
-    console.log('Selected city:', city)
-  }
 
   const submitLocationToFirestore = async () => {
     try {
@@ -99,13 +31,15 @@ const LocationSelect: React.FC = () => {
         docId: user.uid,
         data: {
           userId: user.uid,
-          city: selectedCity.value,
+          city: selectedCity.city,
           country: selectedCity.country,
           latitude: selectedCity.latitude,
           longitude: selectedCity.longitude,
           createdAt: serverTimestamp() as unknown as Timestamp,
         },
       })
+
+      setNewCityFound(false)
     } catch (error) {
       console.error('Error writing location to Firestore:', error)
       setError('Failed to save location')
@@ -135,16 +69,23 @@ const LocationSelect: React.FC = () => {
         throw new Error('Could not determine your city')
       }
 
+      const { name, state, country } = cityInfo
+      const scatteredCoors = await getCityCoordinates(name, country, state)
+
+      if (!scatteredCoors) {
+        throw new Error('Could not get city coordinates')
+      }
+
       const cityOption: CityOption = {
-        value: cityInfo.name.toLowerCase().replace(/\s+/g, '-'), // Create a URL-friendly value
-        label: cityInfo.name,
-        country: cityInfo.country,
-        state: cityInfo.state,
-        latitude: latitude,
-        longitude: longitude,
+        city: name,
+        country: country,
+        state: state,
+        latitude: scatteredCoors.scatteredLatitude,
+        longitude: scatteredCoors.scatteredLongitude,
       }
 
       setSelectedCity(cityOption)
+      setNewCityFound(true)
     } catch (err) {
       console.error('Error finding location:', err)
       setError(err instanceof Error ? err.message : 'An unknown error occurred')
@@ -155,37 +96,20 @@ const LocationSelect: React.FC = () => {
 
   return (
     <>
-      <Container className="flex items-center justify-center gap-4 pl-0">
-        <CitySelect
-          label="Your City"
-          value={selectedCity}
-          onChange={handleCityChange}
-          required
-        />
-
-        <button
-          onClick={findCityByGeolocation}
-          disabled={isLoading}
-          className="btn btn-primary"
-        >
-          {isLoading ? 'Finding location...' : 'Get My Location'}
-        </button>
-      </Container>
-      {isLoading && <div className="text-gray-500">Loading...</div>}
-
-      {error && <div className="text-sm text-red-500">{error}</div>}
-
-      {selectedCity && (
-        <Container className="flex items-center justify-between gap-4 rounded-md bg-gray-100 py-4">
-          <div className="flex flex-col gap-2">
-            <h2 className="font-bold">Selected Location:</h2>
+      <Container className="flex items-center justify-between gap-4 rounded-md bg-gray-100 py-4">
+        <div className="flex flex-col gap-2">
+          <h2 className="font-bold">Selected Location:</h2>
+          {selectedCity ? (
             <p>
-              {selectedCity.label},{' '}
+              {selectedCity.city},{' '}
               {selectedCity.state && `${selectedCity.state}, `}
               {selectedCity.country}
             </p>
-          </div>
-          {/* // TODO: hide until next location is selected */}
+          ) : (
+            <p>{isLoading ? 'Finding location...' : 'No location selected'}</p>
+          )}
+        </div>
+        {selectedCity && newCityFound ? (
           <button
             onClick={submitLocationToFirestore}
             disabled={!selectedCity}
@@ -193,8 +117,17 @@ const LocationSelect: React.FC = () => {
           >
             Upload Location
           </button>
-        </Container>
-      )}
+        ) : (
+          <button
+            onClick={findCityByGeolocation}
+            disabled={isLoading}
+            className="btn btn-primary"
+          >
+            {isLoading ? 'Finding location...' : 'Get My Location'}
+          </button>
+        )}
+      </Container>
+      {error && <div className="text-sm text-red-500">{error}</div>}
     </>
   )
 }
