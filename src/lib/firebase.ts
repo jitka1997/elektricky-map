@@ -145,6 +145,7 @@ async function getAllLocations() {
     const locations = await getUserLocations(user.userId)
     return {
       userId: user.userId,
+      userName: user.displayName,
       photoURL: user.photoURL,
       lastLogin: user.lastLogin,
       locations,

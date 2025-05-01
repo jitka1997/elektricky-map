@@ -1,9 +1,9 @@
-import { serverTimestamp, Timestamp } from 'firebase/firestore'
+import { collection, doc, serverTimestamp, Timestamp } from 'firebase/firestore'
 import React, { useState } from 'react'
 
 import Container from '@/components/Container'
 import { useAuth } from '@/lib/AuthContext'
-import { writeToFirestore } from '@/lib/firebase'
+import { db, writeToFirestore } from '@/lib/firebase'
 import { useLocations } from '@/lib/LocationContext'
 import { getCityCoordinates, getNearestCity } from '@/lib/utils'
 
@@ -30,7 +30,7 @@ const LocationSelect: React.FC = () => {
 
       await writeToFirestore({
         collection: 'locations',
-        docId: user.uid,
+        docId: doc(collection(db, 'locations')).id,
         data: {
           userId: user.uid,
           city: selectedCity.city,
