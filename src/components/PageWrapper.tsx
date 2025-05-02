@@ -10,7 +10,7 @@ const PageWrapper = ({ children }: { children: ReactNode }) => {
   const isLoginPage = pathname === '/login'
 
   return (
-    <div className="m-0 flex min-h-screen flex-col">
+    <div className="bg-base-100 m-0 flex min-h-screen flex-col">
       {!isLoginPage && (
         <header className="relative z-30">
           <NavBar classname="border-b-2 h-[60px]" />

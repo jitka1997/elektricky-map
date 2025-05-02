@@ -37,7 +37,7 @@ const HistoryPage = () => {
   if (usersWithLocations.length === 0) {
     return (
       <Container className="py-8">
-        <div className="card bg-base-100 shadow-md">
+        <div className="card bg-base-200 shadow-md">
           <div className="card-body text-center">
             <h2 className="card-title justify-center">No Locations Found</h2>
             <p>No location data available.</p>
@@ -59,11 +59,11 @@ const HistoryPage = () => {
           return (
             <div
               key={userId || userIndex}
-              className="card bg-base-100 overflow-hidden shadow-md"
+              className="card bg-base-200 overflow-hidden shadow-md"
             >
               <div className="card-body p-0">
                 {/* User Header */}
-                <div className="bg-base-200 flex items-center gap-3 p-4">
+                <div className="bg-base-300 flex items-center gap-3 p-4">
                   <UserIcon photoURL={photoURL} />
                   <div>
                     <h2 className="card-title"></h2>
