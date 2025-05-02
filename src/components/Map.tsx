@@ -96,8 +96,8 @@ const Map = () => {
   return (
     <div className="relative h-[500px] w-full">
       <MapContainer
-        center={[20, 0]}
-        zoom={2}
+        center={[48.1486, 17.1077]} // Default center (Bratislava)
+        zoom={4}
         scrollWheelZoom={true}
         style={{ height: '100%', width: '100%' }}
       >
