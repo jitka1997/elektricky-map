@@ -28,7 +28,7 @@ const NavBar = ({ classname }: Props) => {
           <Link href={'/history'}>History</Link>
         </div>
         <div className="text-large flex items-center gap-4 font-semibold">
-          <span className="text-gray-700">
+          <span className="hidden text-gray-700 sm:inline">
             {user?.displayName || user?.email}
           </span>
           <UserIcon photoURL={user?.photoURL} />

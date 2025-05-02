@@ -19,12 +19,14 @@ const LocationSelect: React.FC = () => {
   const [selectedCity, setSelectedCity] = useState<CityOption | null>(null)
   const [newCityFound, setNewCityFound] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+  const [isUploading, setIsUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const { user } = useAuth()
   const { refreshLocations } = useLocations()
 
   const submitLocationToFirestore = async () => {
     try {
+      setIsUploading(true)
       if (!user) throw new Error('User not authenticated')
       if (!selectedCity) throw new Error('No city selected')
 
@@ -42,6 +44,7 @@ const LocationSelect: React.FC = () => {
 
       await refreshLocations()
       setNewCityFound(false)
+      setIsUploading(false)
     } catch (error) {
       console.error('Error writing location to Firestore:', error)
       setError('Failed to save location')
@@ -114,10 +117,10 @@ const LocationSelect: React.FC = () => {
         {selectedCity && newCityFound ? (
           <button
             onClick={submitLocationToFirestore}
-            disabled={!selectedCity}
+            disabled={isUploading}
             className="btn btn-primary"
           >
-            Upload Location
+            {isUploading ? 'Uploading...' : 'Update Location'}
           </button>
         ) : (
           <button
