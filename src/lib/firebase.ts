@@ -2,6 +2,7 @@ import { getAnalytics } from 'firebase/analytics'
 import { getApps, initializeApp } from 'firebase/app'
 import { getAuth } from 'firebase/auth'
 import {
+  addDoc,
   collection,
   doc,
   getDocs,
@@ -10,7 +11,6 @@ import {
   query,
   setDoc,
   Timestamp,
-  where,
 } from 'firebase/firestore'
 
 const firebaseConfig = {
@@ -55,36 +55,48 @@ export type LocationEntry = {
   createdAt: Date | Timestamp
 }
 
-type WriteToFirestoreType = {
-  collection: string
-  docId: string
-  data: UserEntry | LocationEntry
+type WriteUserToFirestoreType = {
+  userId: string
+  userData: UserEntry
 }
 
-const writeToFirestore = async ({
-  collection,
-  docId,
-  data,
-}: WriteToFirestoreType) => {
+const writeUserToFirestore = async ({
+  userId,
+  userData,
+}: WriteUserToFirestoreType) => {
   try {
-    await setDoc(doc(db, collection, docId), data, { merge: true })
-    console.log('Data written to Firestore', data)
+    const userRef = doc(db, 'users', userId)
+    await setDoc(userRef, userData, { merge: true })
+    console.log(`User's ${userData.displayName} data written successfully`)
   } catch (error) {
-    console.error('Error writing user data to Firestore:', error)
+    console.error('Error creating user:', error)
+  }
+}
+
+type WriteLocationToFirestoreType = {
+  userId: string
+  locationData: LocationEntry
+}
+
+const writeLocationToFirestore = async ({
+  userId,
+  locationData,
+}: WriteLocationToFirestoreType) => {
+  try {
+    const locationsRef = collection(db, 'users', userId, 'locations')
+    await addDoc(locationsRef, locationData)
+    console.log(`Location data for user ${userId} written successfully`)
+  } catch (error) {
+    console.error('Error writing location data to Firestore:', error)
   }
 }
 
 async function getUserLocations(userId: string) {
   try {
     // Create a reference to the locations collection
-    const locationsRef = collection(db, 'locations')
+    const locationsRef = collection(db, 'users', userId, 'locations')
 
-    // Create a query against the collection
-    const q = query(
-      locationsRef,
-      where('userId', '==', userId),
-      orderBy('createdAt', 'desc')
-    )
+    const q = query(locationsRef, orderBy('createdAt', 'desc'))
 
     const querySnapshot = await getDocs(q)
 
@@ -154,4 +166,12 @@ async function getAllLocations() {
   return allLocations
 }
 
-export { analytics, app, auth, db, getAllLocations, writeToFirestore }
+export {
+  analytics,
+  app,
+  auth,
+  db,
+  getAllLocations,
+  writeLocationToFirestore,
+  writeUserToFirestore,
+}

@@ -1,9 +1,9 @@
-import { collection, doc, serverTimestamp, Timestamp } from 'firebase/firestore'
+import { serverTimestamp, Timestamp } from 'firebase/firestore'
 import React, { useState } from 'react'
 
 import Container from '@/components/Container'
 import { useAuth } from '@/lib/AuthContext'
-import { db, writeToFirestore } from '@/lib/firebase'
+import { writeLocationToFirestore } from '@/lib/firebase'
 import { useLocations } from '@/lib/LocationContext'
 import { getCityCoordinates, getNearestCity } from '@/lib/utils'
 
@@ -28,10 +28,9 @@ const LocationSelect: React.FC = () => {
       if (!user) throw new Error('User not authenticated')
       if (!selectedCity) throw new Error('No city selected')
 
-      await writeToFirestore({
-        collection: 'locations',
-        docId: doc(collection(db, 'locations')).id,
-        data: {
+      await writeLocationToFirestore({
+        userId: user.uid,
+        locationData: {
           userId: user.uid,
           city: selectedCity.city,
           country: selectedCity.country,

@@ -17,7 +17,7 @@ import {
   useState,
 } from 'react'
 
-import { auth, writeToFirestore } from '@/lib/firebase'
+import { auth, writeUserToFirestore } from '@/lib/firebase'
 
 interface AuthContextType {
   user: User | null
@@ -39,10 +39,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       // Only write user data if this is a new sign-in
       if (user && sessionStorage.getItem('isNewSignIn') === 'true') {
         try {
-          await writeToFirestore({
-            collection: 'users',
-            docId: user.uid,
-            data: {
+          await writeUserToFirestore({
+            userId: user.uid,
+            userData: {
               userId: user.uid,
               displayName: user.displayName,
               email: user.email,
