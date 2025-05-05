@@ -5,11 +5,11 @@ interface UserIconProps {
 const UserIcon = ({ photoURL }: UserIconProps) => {
   if (!photoURL) {
     return (
-      <div className="h-8 w-8 overflow-hidden rounded-full border border-gray-200 bg-gray-300" />
+      <div className="border-base-300 bg-base-300 h-8 w-8 overflow-hidden rounded-full border" />
     )
   }
   return (
-    <div className="h-8 w-8 overflow-hidden rounded-full border border-gray-200">
+    <div className="border-base-300 h-8 w-8 overflow-hidden rounded-full border">
       <img
         src={photoURL}
         alt="Profile"

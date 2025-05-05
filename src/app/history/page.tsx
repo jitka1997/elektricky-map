@@ -36,7 +36,7 @@ const HistoryPage = () => {
 
   if (usersWithLocations.length === 0) {
     return (
-      <Container className="py-8">
+      <Container className="text-base-content py-8">
         <div className="card bg-base-200 shadow-md">
           <div className="card-body text-center">
             <h2 className="card-title justify-center">No Locations Found</h2>
@@ -48,7 +48,7 @@ const HistoryPage = () => {
   }
 
   return (
-    <Container className="py-8">
+    <Container className="text-base-content py-8">
       <h1 className="mb-8 text-3xl font-bold">Location History</h1>
 
       <div className="space-y-10">

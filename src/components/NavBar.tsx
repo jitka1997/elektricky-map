@@ -18,17 +18,17 @@ const NavBar = ({ classname }: Props) => {
   return (
     <div
       className={twMerge(
-        'fixed top-0 left-0 z-10 flex w-full bg-white print:hidden',
+        'fixed top-0 left-0 z-10 flex w-full print:hidden',
         classname
       )}
     >
-      <Container className="flex items-center justify-between py-2">
+      <Container className="text-base-content bg-base-200 flex items-center justify-between py-2 shadow-md">
         <div className="text-large flex gap-8 font-semibold">
           <Link href={'/'}>Map</Link>
           <Link href={'/history'}>History</Link>
         </div>
         <div className="text-large flex items-center gap-4 font-semibold">
-          <span className="hidden text-gray-700 sm:inline">
+          <span className="hidden sm:inline">
             {user?.displayName || user?.email}
           </span>
           <UserIcon photoURL={user?.photoURL} />

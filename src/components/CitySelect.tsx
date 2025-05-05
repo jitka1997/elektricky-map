@@ -102,7 +102,7 @@ const LocationSelect: React.FC = () => {
   return (
     <>
       <Container className="bg-base-200 flex items-center justify-between gap-4 rounded-md py-4">
-        <div className="flex flex-col gap-2">
+        <div className="text-base-content flex flex-col gap-2">
           <h2 className="font-bold">Selected Location:</h2>
           {selectedCity ? (
             <p>

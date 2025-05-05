@@ -40,7 +40,7 @@ const Home = () => {
     <main className="flex min-h-screen flex-col items-center p-4">
       <div className="w-full max-w-6xl">
         <div className="mb-6 flex items-center justify-between">
-          <h1 className="text-3xl font-bold">{TITLE}</h1>
+          <h1 className="text-base-content text-3xl font-bold">{TITLE}</h1>
         </div>
         <Container className="flex flex-col gap-4">
           <MapWithNoSSR />

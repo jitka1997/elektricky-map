@@ -28,7 +28,7 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" data-theme="caramellatte">
+    <html lang="en">
       <head>
         <link
           rel="icon"
