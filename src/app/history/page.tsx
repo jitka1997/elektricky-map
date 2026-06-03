@@ -3,11 +3,17 @@
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 
+import CitySearch from '@/components/CitySearch'
 import Container from '@/components/Container'
 import UserIcon from '@/components/UserIcon'
 import { useAuth } from '@/lib/AuthContext'
-import { deleteLocationFromFirestore } from '@/lib/firebase'
+import {
+  deleteLocationFromFirestore,
+  LocationEntry,
+  updateLocationInFirestore,
+} from '@/lib/firebase'
 import { useLocations } from '@/lib/LocationContext'
+import { CityOption } from '@/lib/utils'
 
 const HistoryPage = () => {
   const { user, loading: authLoading } = useAuth()
@@ -15,6 +21,7 @@ const HistoryPage = () => {
     locationData,
     isLoading: locationsLoading,
     removeLocation,
+    updateLocation,
   } = useLocations()
   const router = useRouter()
 
@@ -24,6 +31,13 @@ const HistoryPage = () => {
   // the delete request is in flight.
   const [pendingDelete, setPendingDelete] = useState<string | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
+  // Location being edited (drives the edit modal), the newly picked city, and
+  // whether the save request is in flight.
+  const [editingLocation, setEditingLocation] = useState<LocationEntry | null>(
+    null
+  )
+  const [editCity, setEditCity] = useState<CityOption | null>(null)
+  const [isSaving, setIsSaving] = useState(false)
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -67,6 +81,80 @@ const HistoryPage = () => {
       window.alert('Failed to delete location. Please try again.')
     } finally {
       setIsDeleting(false)
+    }
+  }
+
+  const openEdit = (location: LocationEntry) => {
+    setEditingLocation(location)
+    setEditCity({
+      city: location.city,
+      country: location.country,
+      latitude: location.latitude,
+      longitude: location.longitude,
+    })
+  }
+
+  const closeEdit = () => {
+    setEditingLocation(null)
+    setEditCity(null)
+  }
+
+  // Whether the picked city differs from the location being edited.
+  const editChanged = !!(
+    editCity &&
+    editingLocation &&
+    (editCity.city !== editingLocation.city ||
+      editCity.country !== editingLocation.country)
+  )
+
+  // The locations adjacent to the one being edited. Locations are newest-first,
+  // so the older (chronologically previous) neighbour is the next index and the
+  // newer one is the previous index.
+  const myLocations =
+    locationData.find((u) => u.userId === user.uid)?.locations ?? []
+  const editingIndex = editingLocation
+    ? myLocations.findIndex((l) => l.id === editingLocation.id)
+    : -1
+  const olderLocation =
+    editingIndex >= 0 ? myLocations[editingIndex + 1] : undefined
+  const newerLocation =
+    editingIndex >= 1 ? myLocations[editingIndex - 1] : undefined
+
+  const sameCity = (loc?: LocationEntry) =>
+    !!(
+      editCity &&
+      loc &&
+      editCity.city.trim().toLowerCase() === loc.city.trim().toLowerCase() &&
+      editCity.country.trim().toLowerCase() ===
+        loc.country.trim().toLowerCase()
+    )
+
+  // Block saving if the picked city matches either adjacent location, which
+  // would create a redundant consecutive duplicate.
+  const matchesAdjacent = sameCity(olderLocation) || sameCity(newerLocation)
+
+  const saveEdit = async () => {
+    if (!editingLocation?.id || !editCity || !editChanged || matchesAdjacent)
+      return
+    setIsSaving(true)
+    const changes = {
+      city: editCity.city,
+      country: editCity.country,
+      latitude: editCity.latitude,
+      longitude: editCity.longitude,
+    }
+    try {
+      await updateLocationInFirestore({
+        userId: user.uid,
+        locationId: editingLocation.id,
+        locationData: changes,
+      })
+      updateLocation(user.uid, editingLocation.id, changes)
+      closeEdit()
+    } catch {
+      window.alert('Failed to update location. Please try again.')
+    } finally {
+      setIsSaving(false)
     }
   }
 
@@ -171,13 +259,22 @@ const HistoryPage = () => {
                               </div>
                             </div>
                             {isOwn && location.id && (
-                              <button
-                                type="button"
-                                onClick={() => setPendingDelete(location.id!)}
-                                className="btn btn-error btn-sm"
-                              >
-                                Delete
-                              </button>
+                              <div className="flex gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => openEdit(location)}
+                                  className="btn btn-outline btn-sm"
+                                >
+                                  Edit
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setPendingDelete(location.id!)}
+                                  className="btn btn-error btn-sm"
+                                >
+                                  Delete
+                                </button>
+                              </div>
                             )}
                           </div>
                         </div>
@@ -220,6 +317,49 @@ const HistoryPage = () => {
           className="modal-backdrop"
           aria-label="Close"
           onClick={() => !isDeleting && setPendingDelete(null)}
+        />
+      </div>
+
+      {/* Edit location modal */}
+      <div className={`modal ${editingLocation ? 'modal-open' : ''}`}>
+        <div className="modal-box overflow-visible">
+          <h3 className="mb-4 text-lg font-bold">Edit location</h3>
+          {editingLocation && (
+            <CitySearch
+              key={editingLocation.id}
+              value={editCity}
+              onSelect={setEditCity}
+            />
+          )}
+          {matchesAdjacent && (
+            <div className="text-base-content/70 mt-2 text-sm">
+              Same as an adjacent location — pick a different city.
+            </div>
+          )}
+          <div className="modal-action">
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={closeEdit}
+              disabled={isSaving}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={saveEdit}
+              disabled={isSaving || !editChanged || matchesAdjacent}
+            >
+              {isSaving ? 'Saving...' : 'Save'}
+            </button>
+          </div>
+        </div>
+        <button
+          type="button"
+          className="modal-backdrop"
+          aria-label="Close"
+          onClick={() => !isSaving && closeEdit()}
         />
       </div>
     </Container>

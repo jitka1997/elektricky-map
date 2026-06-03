@@ -12,6 +12,7 @@ import {
   query,
   setDoc,
   Timestamp,
+  updateDoc,
 } from 'firebase/firestore'
 
 const firebaseConfig = {
@@ -93,6 +94,32 @@ const writeLocationToFirestore = async ({
     return docRef.id
   } catch (error) {
     console.error('Error writing location data to Firestore:', error)
+    throw error
+  }
+}
+
+type UpdateLocationInFirestoreType = {
+  userId: string
+  locationId: string
+  locationData: {
+    city: string
+    country: string
+    latitude: number
+    longitude: number
+  }
+}
+
+const updateLocationInFirestore = async ({
+  userId,
+  locationId,
+  locationData,
+}: UpdateLocationInFirestoreType) => {
+  try {
+    const locationRef = doc(db, 'users', userId, 'locations', locationId)
+    await updateDoc(locationRef, locationData)
+    console.log(`Location ${locationId} for user ${userId} updated`)
+  } catch (error) {
+    console.error('Error updating location in Firestore:', error)
     throw error
   }
 }
@@ -199,6 +226,7 @@ export {
   db,
   deleteLocationFromFirestore,
   getAllLocations,
+  updateLocationInFirestore,
   writeLocationToFirestore,
   writeUserToFirestore,
 }

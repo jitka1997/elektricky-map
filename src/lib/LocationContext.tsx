@@ -15,6 +15,11 @@ interface LocationContextType {
   locationData: LocationData[]
   refreshLocations: () => Promise<void>
   removeLocation: (userId: string, locationId: string) => void
+  updateLocation: (
+    userId: string,
+    locationId: string,
+    changes: Partial<LocationEntry>
+  ) => void
   addLocation: (
     userId: string,
     location: LocationEntry,
@@ -60,6 +65,26 @@ export const LocationProvider = ({ children }: { children: ReactNode }) => {
           ? {
               ...u,
               locations: u.locations.filter((l) => l.id !== locationId),
+            }
+          : u
+      )
+    )
+  }
+
+  // Update a single location's fields in local state without refetching.
+  const updateLocation = (
+    userId: string,
+    locationId: string,
+    changes: Partial<LocationEntry>
+  ) => {
+    setLocationData((prev) =>
+      prev.map((u) =>
+        u.userId === userId
+          ? {
+              ...u,
+              locations: u.locations.map((l) =>
+                l.id === locationId ? { ...l, ...changes } : l
+              ),
             }
           : u
       )
@@ -116,6 +141,7 @@ export const LocationProvider = ({ children }: { children: ReactNode }) => {
         locationData,
         refreshLocations,
         removeLocation,
+        updateLocation,
         addLocation,
         flySignal,
         requestFlyToMyLocation,
