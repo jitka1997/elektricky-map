@@ -25,8 +25,8 @@ const HistoryPage = () => {
   } = useLocations()
   const router = useRouter()
 
-  // User card ids that are currently collapsed (empty = all expanded).
-  const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
+  // User card ids that are currently expanded (empty = all collapsed).
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
   // Location id awaiting delete confirmation (drives the modal), and whether
   // the delete request is in flight.
   const [pendingDelete, setPendingDelete] = useState<string | null>(null)
@@ -55,8 +55,8 @@ const HistoryPage = () => {
     )
   }
 
-  const toggleCollapsed = (id: string) => {
-    setCollapsed((prev) => {
+  const toggleExpanded = (id: string) => {
+    setExpanded((prev) => {
       const next = new Set(prev)
       if (next.has(id)) {
         next.delete(id)
@@ -184,7 +184,7 @@ const HistoryPage = () => {
           // User information
           const { userId, userName, photoURL, locations } = userData
           const cardId = userId || String(userIndex)
-          const isCollapsed = collapsed.has(cardId)
+          const isCollapsed = !expanded.has(cardId)
           const isOwn = userId === user.uid
 
           const firstName = userName ? userName.trim().split(' ')[0] : ''
@@ -203,7 +203,7 @@ const HistoryPage = () => {
                 {/* User Header — click to collapse/expand */}
                 <button
                   type="button"
-                  onClick={() => toggleCollapsed(cardId)}
+                  onClick={() => toggleExpanded(cardId)}
                   aria-expanded={!isCollapsed}
                   className="bg-base-300 hover:bg-base-300/70 flex w-full items-center gap-3 p-4 text-left transition-colors"
                 >
