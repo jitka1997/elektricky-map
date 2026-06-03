@@ -4,6 +4,7 @@ import { getAuth } from 'firebase/auth'
 import {
   addDoc,
   collection,
+  deleteDoc,
   doc,
   getDocs,
   getFirestore,
@@ -47,6 +48,9 @@ type UserEntry = {
 }
 
 export type LocationEntry = {
+  // Firestore document id — present on entries read back from Firestore,
+  // absent when constructing a new entry to write.
+  id?: string
   userId: string
   city: string
   country: string
@@ -84,10 +88,31 @@ const writeLocationToFirestore = async ({
 }: WriteLocationToFirestoreType) => {
   try {
     const locationsRef = collection(db, 'users', userId, 'locations')
-    await addDoc(locationsRef, locationData)
+    const docRef = await addDoc(locationsRef, locationData)
     console.log(`Location data for user ${userId} written successfully`)
+    return docRef.id
   } catch (error) {
     console.error('Error writing location data to Firestore:', error)
+    throw error
+  }
+}
+
+type DeleteLocationFromFirestoreType = {
+  userId: string
+  locationId: string
+}
+
+const deleteLocationFromFirestore = async ({
+  userId,
+  locationId,
+}: DeleteLocationFromFirestoreType) => {
+  try {
+    const locationRef = doc(db, 'users', userId, 'locations', locationId)
+    await deleteDoc(locationRef)
+    console.log(`Location ${locationId} for user ${userId} deleted`)
+  } catch (error) {
+    console.error('Error deleting location from Firestore:', error)
+    throw error
   }
 }
 
@@ -105,6 +130,7 @@ async function getUserLocations(userId: string) {
     querySnapshot.forEach((doc) => {
       const data = doc.data()
       locations.push({
+        id: doc.id,
         userId: data.userId,
         city: data.city,
         country: data.country,
@@ -171,6 +197,7 @@ export {
   app,
   auth,
   db,
+  deleteLocationFromFirestore,
   getAllLocations,
   writeLocationToFirestore,
   writeUserToFirestore,

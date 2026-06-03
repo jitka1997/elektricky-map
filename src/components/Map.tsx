@@ -3,9 +3,10 @@
 import 'leaflet/dist/leaflet.css'
 
 import L from 'leaflet'
-import { useState } from 'react'
+import { useEffect, useRef } from 'react'
 import { MapContainer, Marker, Popup, TileLayer, useMap } from 'react-leaflet'
 
+import { useAuth } from '@/lib/AuthContext'
 import { useLocations } from '@/lib/LocationContext'
 
 // Function to create custom icon from user's photo URL
@@ -25,19 +26,11 @@ const createUserIcon = (photoURL: string | null) => {
     })
   }
 
-  // Create an HTML element for the custom icon
-  const iconHtml = document.createElement('div')
-  iconHtml.style.backgroundImage = `url(${photoURL})`
-  iconHtml.style.backgroundSize = 'cover'
-  iconHtml.style.width = '40px'
-  iconHtml.style.height = '40px'
-  iconHtml.style.borderRadius = '50%'
-  iconHtml.style.border = '2px solid gray'
-  iconHtml.style.boxShadow = '0 1px 3px rgba(0,0,0,0.3)'
-
-  // Create a divIcon instead of a standard icon
+  // Use an <img> with referrerpolicy="no-referrer" rather than a CSS
+  // background-image: Google profile photos (lh3.googleusercontent.com) reject
+  // requests that send a referrer header, which background-image always does.
   return L.divIcon({
-    html: iconHtml,
+    html: `<img src="${photoURL}" referrerpolicy="no-referrer" style="width:40px;height:40px;border-radius:50%;border:2px solid gray;box-shadow:0 1px 3px rgba(0,0,0,0.3);object-fit:cover;" />`,
     className: 'user-photo-icon',
     iconSize: [40, 40],
     iconAnchor: [20, 40],
@@ -46,39 +39,46 @@ const createUserIcon = (photoURL: string | null) => {
 }
 
 const LocationMarker = () => {
-  const [error, setError] = useState<string | null>(null)
   const map = useMap()
+  const { user } = useAuth()
+  const { locationData, flySignal } = useLocations()
+  const didMount = useRef(false)
 
-  const findLocation = () => {
-    setError(null)
+  // The current user's most recent logged location (locations are ordered
+  // newest-first), or undefined if they have none.
+  const myLocation = locationData.find((u) => u.userId === user?.uid)
+    ?.locations?.[0]
 
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const { latitude, longitude } = position.coords
-          map.flyTo([latitude, longitude], 5)
-        },
-        (error) => {
-          setError(`Location error: ${error.message}`)
-        }
-      )
-    } else {
-      setError('Geolocation is not supported by your browser')
+  // Fly to the user's pin whenever flySignal is bumped (e.g. after logging a
+  // new location). Skip the initial mount so it only fires on real requests.
+  useEffect(() => {
+    if (!didMount.current) {
+      didMount.current = true
+      return
     }
+    if (myLocation) {
+      map.flyTo([myLocation.latitude, myLocation.longitude], 5)
+    }
+    // Only react to flySignal changes, not to every location/map update.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [flySignal])
+
+  // Nothing to fly to — hide the button entirely.
+  if (!myLocation) return null
+
+  const flyToMyLocation = () => {
+    map.flyTo([myLocation.latitude, myLocation.longitude], 5)
   }
 
   return (
-    <>
-      <div className="absolute top-2 right-2 z-[1000]">
-        <button
-          onClick={findLocation}
-          className="btn btn-primary btn-xs rounded-full"
-        >
-          Fly to my location
-        </button>
-        {error && <div className="mt-2 text-red-500">{error}</div>}
-      </div>
-    </>
+    <div className="absolute top-2 right-2 z-[1000]">
+      <button
+        onClick={flyToMyLocation}
+        className="btn btn-primary btn-xs rounded-full"
+      >
+        Fly to my location
+      </button>
+    </div>
   )
 }
 

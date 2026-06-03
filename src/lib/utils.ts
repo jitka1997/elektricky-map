@@ -1,84 +1,152 @@
 /**
- * Get the nearest city based on latitude and longitude coordinates
- * @param latitude - The latitude coordinate
- * @param longitude - The longitude coordinate
- * @returns Promise with city information or null if not found
+ * Geocoding helpers backed by Photon (https://photon.komoot.io), an
+ * OpenStreetMap-based geocoder built for search-as-you-type. Unlike Nominatim
+ * it has no 1-request/second autocomplete restriction, so it's safe to call on
+ * every keystroke (debounced).
  */
-export const getNearestCity = async (latitude: number, longitude: number) => {
-  try {
-    // Use OpenStreetMap's Nominatim service (free, no API key required)
-    const response = await fetch(
-      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=10`,
-      {
-        headers: {
-          'Accept-Language': 'en', // Get results in English
-          'User-Agent': 'ElektrickyMap/1.0', // Please replace with your app name (required by Nominatim ToS)
-        },
-      }
-    )
 
-    if (!response.ok) {
-      throw new Error(`Geocoding API error: ${response.status}`)
-    }
+const PHOTON_BASE = 'https://photon.komoot.io'
 
-    const data = await response.json()
+// Only surface populated places in autocomplete, not streets/buildings.
+const PLACE_TAGS = ['place:city', 'place:town', 'place:village', 'place:hamlet']
 
-    // Extract the relevant city information from the response
-    const cityInfo = {
-      name:
-        data.address.city ||
-        data.address.town ||
-        data.address.village ||
-        data.address.hamlet ||
-        'Unknown',
-      state: data.address.state || data.address.county || undefined,
-      country: data.address.country || 'Unknown',
-    }
+export type CityOption = {
+  city: string
+  country: string
+  state?: string
+  latitude: number
+  longitude: number
+}
 
-    return cityInfo
-  } catch (error) {
-    console.error('Error getting nearest city:', error)
-    return null
+type PhotonFeature = {
+  geometry?: { coordinates?: [number, number] }
+  properties?: {
+    name?: string
+    city?: string
+    town?: string
+    village?: string
+    state?: string
+    county?: string
+    country?: string
+  }
+}
+
+/** Build a human-readable label like "Bratislava, Slovakia". */
+export const formatCity = (city: CityOption): string =>
+  [city.city, city.state, city.country].filter(Boolean).join(', ')
+
+/** Convert a Photon GeoJSON feature into a CityOption (or null if unusable). */
+const featureToCityOption = (feature: PhotonFeature): CityOption | null => {
+  const props = feature.properties
+  const coords = feature.geometry?.coordinates
+  if (!props || !coords) return null
+
+  const city = props.name || props.city || props.town || props.village
+  if (!city) return null
+
+  return {
+    city,
+    country: props.country || 'Unknown',
+    state: props.state || props.county || undefined,
+    // GeoJSON coordinates are [longitude, latitude].
+    latitude: coords[1],
+    longitude: coords[0],
   }
 }
 
 /**
- * Get the coordinates of a city using OpenCage Geocoding API
- * @param city - The name of the city
- * @param country - The name of the country (optional)
- * @param state - The name of the state (optional)
- * @returns Promise with latitude and longitude or null if not found
+ * Forward search for autocomplete. Returns city-level matches for a partial
+ * query, optionally biased toward a given lat/lon.
  */
-export const getCityCoordinates = async (
-  city: string,
-  country?: string,
-  state?: string
-) => {
-  let searchQuery = city
-  if (state) searchQuery += `, ${state}`
-  if (country) searchQuery += `, ${country}`
-  const cityResponse = await fetch(
-    `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}&limit=1`,
-    {
-      headers: {
-        'Accept-Language': 'en',
-        'User-Agent': 'ElektrickyMap/1.0',
-      },
-    }
-  )
+export const searchCities = async (
+  query: string,
+  opts?: { latitude?: number; longitude?: number; limit?: number }
+): Promise<CityOption[]> => {
+  const q = query.trim()
+  if (!q) return []
 
-  if (!cityResponse.ok) {
-    throw new Error(`City search API error: ${cityResponse.status}`)
+  const params = new URLSearchParams()
+  params.set('q', q)
+  params.set('lang', 'en')
+  params.set('limit', String(opts?.limit ?? 6))
+  if (opts?.latitude != null && opts?.longitude != null) {
+    params.set('lat', String(opts.latitude))
+    params.set('lon', String(opts.longitude))
+  }
+  for (const tag of PLACE_TAGS) params.append('osm_tag', tag)
+
+  const response = await fetch(`${PHOTON_BASE}/api/?${params.toString()}`)
+  if (!response.ok) {
+    throw new Error(`City search failed: ${response.status}`)
   }
 
-  const cityData = await cityResponse.json()
-  if (cityData.length === 0) {
-    console.error('City not found:', searchQuery)
-    return null
+  const data = await response.json()
+  const features: PhotonFeature[] = data?.features ?? []
+
+  // Map to CityOptions and drop duplicates (same city/state/country).
+  const seen = new Set<string>()
+  const results: CityOption[] = []
+  for (const feature of features) {
+    const option = featureToCityOption(feature)
+    if (!option) continue
+    const key = `${option.city}|${option.state ?? ''}|${option.country}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    results.push(option)
   }
-  const { lat, lon } = cityData[0]
+  return results
+}
+
+/**
+ * Reverse-geocode coordinates to the surrounding locality (city/town/village).
+ * Returns the place name plus state/country, or null if none found.
+ */
+export const reverseGeocodeCity = async (
+  latitude: number,
+  longitude: number
+): Promise<{ city: string; state?: string; country: string } | null> => {
+  const params = new URLSearchParams({
+    lat: String(latitude),
+    lon: String(longitude),
+    lang: 'en',
+  })
+
+  const response = await fetch(`${PHOTON_BASE}/reverse?${params.toString()}`)
+  if (!response.ok) {
+    throw new Error(`Reverse geocoding failed: ${response.status}`)
+  }
+
+  const data = await response.json()
+  const props: PhotonFeature['properties'] = data?.features?.[0]?.properties
+  if (!props) return null
+
+  const city = props.city || props.name || props.town || props.village
+  if (!city) return null
+
   return {
-    scatteredLatitude: parseFloat(lat),
-    scatteredLongitude: parseFloat(lon),
+    city,
+    state: props.state || props.county || undefined,
+    country: props.country || 'Unknown',
   }
+}
+
+/**
+ * Resolve device coordinates to a city-level CityOption: reverse-geocode to the
+ * city name, then forward-search it so the stored coordinates are the city's,
+ * not the user's exact GPS position (privacy-preserving).
+ */
+export const cityOptionFromCoords = async (
+  latitude: number,
+  longitude: number
+): Promise<CityOption | null> => {
+  const place = await reverseGeocodeCity(latitude, longitude)
+  if (!place) return null
+
+  const queryParts = [place.city, place.state, place.country].filter(Boolean)
+  const matches = await searchCities(queryParts.join(', '), {
+    latitude,
+    longitude,
+    limit: 1,
+  })
+  return matches[0] ?? null
 }

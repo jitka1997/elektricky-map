@@ -1,148 +1,104 @@
+'use client'
+
 import { serverTimestamp, Timestamp } from 'firebase/firestore'
 import React, { useState } from 'react'
 
+import CitySearch from '@/components/CitySearch'
 import Container from '@/components/Container'
 import { useAuth } from '@/lib/AuthContext'
 import { writeLocationToFirestore } from '@/lib/firebase'
 import { useLocations } from '@/lib/LocationContext'
-import { getCityCoordinates, getNearestCity } from '@/lib/utils'
-
-interface CityOption {
-  city: string
-  country: string
-  latitude: number
-  longitude: number
-  state?: string
-}
+import { CityOption } from '@/lib/utils'
 
 const LocationSelect: React.FC = () => {
   const [selectedCity, setSelectedCity] = useState<CityOption | null>(null)
-  const [newCityFound, setNewCityFound] = useState(false)
-  const [isLoading, setIsLoading] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Bumped after a successful submit to remount CitySearch and clear its input.
+  const [resetKey, setResetKey] = useState(0)
   const { user } = useAuth()
-  const { refreshLocations } = useLocations()
+  const { addLocation, locationData, requestFlyToMyLocation } = useLocations()
+
+  // The user's most recent logged location, and whether the currently selected
+  // city is that same place (logging it again would be a no-op duplicate).
+  const myLatest = locationData.find((u) => u.userId === user?.uid)
+    ?.locations?.[0]
+  const isAlreadyHere = !!(
+    selectedCity &&
+    myLatest &&
+    selectedCity.city.trim().toLowerCase() ===
+      myLatest.city.trim().toLowerCase() &&
+    selectedCity.country.trim().toLowerCase() ===
+      myLatest.country.trim().toLowerCase()
+  )
 
   const submitLocationToFirestore = async () => {
+    setError(null)
     try {
       setIsUploading(true)
       if (!user) throw new Error('User not authenticated')
       if (!selectedCity) throw new Error('No city selected')
+      if (isAlreadyHere) throw new Error('You are already in this location')
 
-      await writeLocationToFirestore({
+      const newLocation = {
+        userId: user.uid,
+        city: selectedCity.city,
+        country: selectedCity.country,
+        latitude: selectedCity.latitude,
+        longitude: selectedCity.longitude,
+      }
+
+      const id = await writeLocationToFirestore({
         userId: user.uid,
         locationData: {
-          userId: user.uid,
-          city: selectedCity.city,
-          country: selectedCity.country,
-          latitude: selectedCity.latitude,
-          longitude: selectedCity.longitude,
+          ...newLocation,
           createdAt: serverTimestamp() as unknown as Timestamp,
         },
       })
 
-      await refreshLocations()
-      setNewCityFound(false)
-      setIsUploading(false)
-    } catch (error) {
-      console.error('Error writing location to Firestore:', error)
-      setError('Failed to save location')
-    }
-  }
-
-  const findCityByGeolocation = async () => {
-    setIsLoading(true)
-    setError(null)
-
-    try {
-      if (!navigator.geolocation) {
-        throw new Error('Geolocation is not supported by your browser')
-      }
-
-      // Get current position. Translate the GeolocationPositionError (which
-      // is NOT an Error instance) into a real Error with an actionable
-      // message, and add a timeout so the request can't hang indefinitely.
-      const position = await new Promise<GeolocationPosition>(
-        (resolve, reject) => {
-          navigator.geolocation.getCurrentPosition(
-            resolve,
-            (geoError) => {
-              const messages: Record<number, string> = {
-                1: 'Location permission is blocked for this site. Click the icon at the left of the address bar, allow Location, then reload the page. (Location also requires an https:// or localhost address.)',
-                2: 'Your location is currently unavailable. Make sure your device location services are on and try again.',
-                3: 'Timed out while getting your location. Please try again.',
-              }
-              reject(new Error(messages[geoError.code] ?? geoError.message))
-            },
-            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-          )
-        }
+      // Optimistically add to local state so the pin/entry appears instantly
+      // without refetching everything. Use a local Date for display.
+      addLocation(
+        user.uid,
+        { ...newLocation, id, createdAt: new Date() },
+        { userName: user.displayName, photoURL: user.photoURL }
       )
 
-      const { latitude, longitude } = position.coords
-      const cityInfo = await getNearestCity(latitude, longitude)
-
-      if (!cityInfo) {
-        throw new Error('Could not determine your city')
-      }
-
-      const { name, state, country } = cityInfo
-      const scatteredCoors = await getCityCoordinates(name, country, state)
-
-      if (!scatteredCoors) {
-        throw new Error('Could not get city coordinates')
-      }
-
-      const cityOption: CityOption = {
-        city: name,
-        country: country,
-        state: state,
-        latitude: scatteredCoors.scatteredLatitude,
-        longitude: scatteredCoors.scatteredLongitude,
-      }
-
-      setSelectedCity(cityOption)
-      setNewCityFound(true)
+      setSelectedCity(null)
+      setResetKey((k) => k + 1)
+      // Fly the map to the freshly logged pin.
+      requestFlyToMyLocation()
     } catch (err) {
-      console.error('Error finding location:', err)
-      setError(err instanceof Error ? err.message : 'An unknown error occurred')
+      console.error('Error writing location to Firestore:', err)
+      setError('Failed to save location')
     } finally {
-      setIsLoading(false)
+      setIsUploading(false)
     }
   }
 
   return (
     <>
-      <Container className="bg-base-200 flex items-center justify-between gap-4 rounded-md py-4">
-        <div className="text-base-content flex flex-col gap-2">
-          <h2 className="font-bold">Selected Location:</h2>
-          {selectedCity ? (
-            <p>
-              {selectedCity.city},{' '}
-              {selectedCity.state && `${selectedCity.state}, `}
-              {selectedCity.country}
-            </p>
-          ) : (
-            <p>{isLoading ? 'Finding location...' : 'No location selected'}</p>
-          )}
-        </div>
-        {selectedCity && newCityFound ? (
+      <Container className="bg-base-200 rounded-md py-4">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+          <div className="flex-1">
+            <CitySearch
+              key={resetKey}
+              value={selectedCity}
+              onSelect={setSelectedCity}
+            />
+          </div>
           <button
             onClick={submitLocationToFirestore}
-            disabled={isUploading}
+            disabled={!selectedCity || isUploading || isAlreadyHere}
             className="btn btn-primary"
           >
             {isUploading ? 'Uploading...' : 'Update Location'}
           </button>
-        ) : (
-          <button
-            onClick={findCityByGeolocation}
-            disabled={isLoading}
-            className="btn btn-primary"
-          >
-            {isLoading ? 'Finding location...' : 'Get My Location'}
-          </button>
+        </div>
+        {isAlreadyHere && (
+          <div className="text-base-content/70 mt-2 text-sm">
+            You&apos;re already in {selectedCity?.city}.
+          </div>
         )}
       </Container>
       {error && <div className="text-sm text-red-500">{error}</div>}
