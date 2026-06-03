@@ -60,10 +60,23 @@ const LocationSelect: React.FC = () => {
         throw new Error('Geolocation is not supported by your browser')
       }
 
-      // Get current position
+      // Get current position. Translate the GeolocationPositionError (which
+      // is NOT an Error instance) into a real Error with an actionable
+      // message, and add a timeout so the request can't hang indefinitely.
       const position = await new Promise<GeolocationPosition>(
         (resolve, reject) => {
-          navigator.geolocation.getCurrentPosition(resolve, reject)
+          navigator.geolocation.getCurrentPosition(
+            resolve,
+            (geoError) => {
+              const messages: Record<number, string> = {
+                1: 'Location permission is blocked for this site. Click the icon at the left of the address bar, allow Location, then reload the page. (Location also requires an https:// or localhost address.)',
+                2: 'Your location is currently unavailable. Make sure your device location services are on and try again.',
+                3: 'Timed out while getting your location. Please try again.',
+              }
+              reject(new Error(messages[geoError.code] ?? geoError.message))
+            },
+            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+          )
         }
       )
 
