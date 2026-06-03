@@ -81,9 +81,7 @@ const CitySearch: React.FC<Props> = ({ value, onSelect }) => {
             resolve,
             (geoError) => {
               reject(
-                new Error(
-                  GEO_ERROR_MESSAGES[geoError.code] ?? geoError.message
-                )
+                new Error(GEO_ERROR_MESSAGES[geoError.code] ?? geoError.message)
               )
             },
             { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }

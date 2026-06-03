@@ -125,8 +125,7 @@ const HistoryPage = () => {
       editCity &&
       loc &&
       editCity.city.trim().toLowerCase() === loc.city.trim().toLowerCase() &&
-      editCity.country.trim().toLowerCase() ===
-        loc.country.trim().toLowerCase()
+      editCity.country.trim().toLowerCase() === loc.country.trim().toLowerCase()
     )
 
   // Block saving if the picked city matches either adjacent location, which
@@ -238,9 +237,7 @@ const HistoryPage = () => {
                 {!isCollapsed && (
                   <div className="divide-base-200 divide-y">
                     {locations.map((location, locationIndex) => {
-                      const date = new Date(
-                        location.createdAt.toLocaleString()
-                      )
+                      const date = new Date(location.createdAt.toLocaleString())
                       const formattedDate = date.toLocaleDateString()
                       const formattedTime = date.toLocaleTimeString([], {
                         hour: '2-digit',
