@@ -36,8 +36,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setUser(user)
 
-      // Only write user data if this is a new sign-in
-      if (user && sessionStorage.getItem('isNewSignIn') === 'true') {
+      // Upsert the user doc on every sign-in. setDoc(..., { merge: true })
+      // is idempotent, so this safely creates the doc if it's missing and
+      // refreshes lastLogin otherwise — guaranteeing the user always has a
+      // users/{uid} document (which getAllUsers/orderBy('lastLogin') needs).
+      if (user) {
         try {
           await writeUserToFirestore({
             userId: user.uid,
@@ -49,8 +52,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
               lastLogin: serverTimestamp() as unknown as Timestamp,
             },
           })
-          // Clear the flag after successful write
-          sessionStorage.removeItem('isNewSignIn')
         } catch (error) {
           console.error('Error writing user data:', error)
         }
@@ -65,13 +66,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const signInWithGoogle = async () => {
     try {
       const provider = new GoogleAuthProvider()
-      // Set a flag to indicate this is a new sign-in
-      sessionStorage.setItem('isNewSignIn', 'true')
       await signInWithPopup(auth, provider)
       console.log('USER SIGNED IN', auth.currentUser)
     } catch (error) {
       console.error('Error signing in with Google:', error)
-      sessionStorage.removeItem('isNewSignIn')
     }
   }
 
