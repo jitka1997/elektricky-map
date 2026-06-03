@@ -13,11 +13,14 @@ const ThemeToggle = () => {
   useEffect(() => {
     const mq = window.matchMedia('(prefers-color-scheme: dark)')
 
-    // Initial state: a saved override wins, otherwise follow the system.
+    // Initial state: a saved override wins, otherwise follow the system. This
+    // reads client-only state (localStorage/matchMedia) that isn't available
+    // during SSR, so it must run here rather than in a lazy initializer.
     const stored = localStorage.getItem(STORAGE_KEY)
-    if (stored === 'dark') setIsDark(true)
-    else if (stored === 'light') setIsDark(false)
-    else setIsDark(mq.matches)
+    const initialDark =
+      stored === 'dark' ? true : stored === 'light' ? false : mq.matches
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setIsDark(initialDark)
 
     // Keep syncing to the browser even after a manual selection: when the OS
     // theme changes, drop the override and follow the system again.
