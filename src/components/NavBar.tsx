@@ -5,6 +5,7 @@ import React from 'react'
 import { twMerge } from 'tailwind-merge'
 
 import Container from '@/components/Container'
+import ThemeToggle from '@/components/ThemeToggle'
 import UserIcon from '@/components/UserIcon'
 import { useAuth } from '@/lib/AuthContext'
 
@@ -28,6 +29,7 @@ const NavBar = ({ classname }: Props) => {
           <Link href={'/history'}>History</Link>
         </div>
         <div className="text-large flex items-center gap-4 font-semibold">
+          <ThemeToggle />
           <span className="hidden sm:inline">
             {user?.displayName || user?.email}
           </span>

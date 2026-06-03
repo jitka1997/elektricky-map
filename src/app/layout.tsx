@@ -28,8 +28,16 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
+        {/* Apply the saved theme before paint to avoid a flash of the wrong
+            colors. No value (system) leaves data-theme unset so daisyUI follows
+            prefers-color-scheme. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var m=localStorage.getItem('theme');var r=document.documentElement;if(m==='light')r.setAttribute('data-theme','caramellatte');else if(m==='dark')r.setAttribute('data-theme','luxury');}catch(e){}})();`,
+          }}
+        />
         <link
           rel="icon"
           type="image/png"
@@ -44,7 +52,7 @@ export default function RootLayout({
         />
       </head>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} bg-base-100 text-base-content antialiased`}
       >
         <AuthProvider>
           <LocationProvider>
