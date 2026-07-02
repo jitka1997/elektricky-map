@@ -83,6 +83,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const signInWithGoogle = async () => {
     try {
       const provider = new GoogleAuthProvider()
+      // Always show the account chooser so users can switch Google accounts
+      // instead of Google silently re-using the last-signed-in one.
+      provider.setCustomParameters({ prompt: 'select_account' })
       await signInWithPopup(auth, provider)
       console.log('USER SIGNED IN', auth.currentUser)
     } catch (error) {
