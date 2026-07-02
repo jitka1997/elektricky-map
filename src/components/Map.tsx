@@ -7,6 +7,7 @@ import { useEffect, useReducer, useRef, useState } from 'react'
 import { MapContainer, Marker, Popup, TileLayer, useMap } from 'react-leaflet'
 
 import { useAuth } from '@/lib/AuthContext'
+import { formatDate, formatTime } from '@/lib/dates'
 import { useLocations } from '@/lib/LocationContext'
 import { travelIcon, travelImage, TravelMode } from '@/lib/travel'
 
@@ -182,7 +183,7 @@ const UserMarkers = ({ hiddenUserId }: { hiddenUserId: string | null }) => {
                 {m.city}, {m.country}
               </div>
               <div className="text-xs text-gray-500">
-                Last seen: {m.createdAt.toLocaleString()}
+                Last seen: {formatDate(m.createdAt)}, {formatTime(m.createdAt)}
               </div>
             </div>
           </Popup>

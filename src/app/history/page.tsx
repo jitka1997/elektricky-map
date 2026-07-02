@@ -9,6 +9,7 @@ import TravelModeIcon from '@/components/TravelModeIcon'
 import TravelModePicker from '@/components/TravelModePicker'
 import UserIcon from '@/components/UserIcon'
 import { useAuth } from '@/lib/AuthContext'
+import { formatDate, formatTime } from '@/lib/dates'
 import {
   deleteLocationFromFirestore,
   LocationEntry,
@@ -346,12 +347,8 @@ const HistoryPage = () => {
                 {!isCollapsed && (
                   <div className="divide-base-300 max-h-[55vh] divide-y overflow-y-auto">
                     {locations.map((location, locationIndex) => {
-                      const date = new Date(location.createdAt.toLocaleString())
-                      const formattedDate = date.toLocaleDateString()
-                      const formattedTime = date.toLocaleTimeString([], {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })
+                      const formattedDate = formatDate(location.createdAt)
+                      const formattedTime = formatTime(location.createdAt)
 
                       return (
                         <div key={location.id || locationIndex} className="p-4">
