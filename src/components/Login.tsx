@@ -9,20 +9,21 @@ import { useAuth } from '@/lib/AuthContext'
 
 const Login = () => {
   const [error, setError] = useState('')
-  const [isSignedIn, setIsSignedIn] = useState(false)
   const { signInWithGoogle, user } = useAuth()
   const router = useRouter()
 
+  // Redirect as soon as auth resolves to a signed-in user, regardless of how
+  // sign-in completed (popup promise vs. onAuthStateChanged ordering).
   useEffect(() => {
-    if (isSignedIn && user) {
+    if (user) {
       router.push('/')
     }
-  }, [isSignedIn, user, router])
+  }, [user, router])
 
   const handleGoogleSignIn = async () => {
+    setError('')
     try {
       await signInWithGoogle()
-      setIsSignedIn(true)
     } catch (err) {
       setError(
         err instanceof Error ? err.message : 'An unexpected error occurred'
