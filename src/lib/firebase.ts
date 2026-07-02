@@ -80,6 +80,9 @@ const writeUserToFirestore = async ({
     console.log(`User's ${userData.displayName} data written successfully`)
   } catch (error) {
     console.error('Error creating user:', error)
+    // Rethrow so callers can react — e.g. a permission-denied here means the
+    // user isn't on the invite allowlist (see firestore.rules).
+    throw error
   }
 }
 
