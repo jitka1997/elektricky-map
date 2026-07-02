@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 import React from 'react'
 import { twMerge } from 'tailwind-merge'
 
@@ -15,6 +16,15 @@ type Props = {
 
 const NavBar = ({ classname }: Props) => {
   const { user, logout } = useAuth()
+  const pathname = usePathname()
+
+  // Highlight the link matching the current route: full opacity + bold for the
+  // active tab, dimmed for the rest. No color change, so it stays on-theme.
+  const linkClass = (href: string) =>
+    twMerge(
+      'opacity-60 transition-opacity hover:opacity-100',
+      pathname === href && 'font-bold opacity-100'
+    )
 
   return (
     <div
@@ -25,8 +35,12 @@ const NavBar = ({ classname }: Props) => {
     >
       <Container className="text-base-content bg-base-200 flex items-center justify-between py-2 shadow-md">
         <div className="text-large flex gap-8 font-semibold">
-          <Link href={'/'}>Map</Link>
-          <Link href={'/history'}>History</Link>
+          <Link href={'/'} className={linkClass('/')}>
+            Map
+          </Link>
+          <Link href={'/history'} className={linkClass('/history')}>
+            History
+          </Link>
         </div>
         <div className="text-large flex items-center gap-4 font-semibold">
           <ThemeToggle />
