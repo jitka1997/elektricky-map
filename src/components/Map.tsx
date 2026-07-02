@@ -83,6 +83,7 @@ const LocationMarker = () => {
 
 type BaseMarker = {
   userId: string
+  userName: string | null
   photoURL: string | null
   lat: number
   lng: number
@@ -97,6 +98,7 @@ const SPREAD_RADIUS_PX = 8
 
 const UserMarkers = ({ hiddenUserId }: { hiddenUserId: string | null }) => {
   const map = useMap()
+  const { user } = useAuth()
   const { locationData } = useLocations()
   // Re-render on zoom so the pixel-based spread stays correct at every zoom.
   const [, forceRerender] = useReducer((n: number) => n + 1, 0)
@@ -117,6 +119,7 @@ const UserMarkers = ({ hiddenUserId }: { hiddenUserId: string | null }) => {
     if (!loc) continue
     base.push({
       userId: u.userId,
+      userName: u.userName,
       photoURL: u.photoURL,
       lat: loc.latitude,
       lng: loc.longitude,
@@ -157,6 +160,13 @@ const UserMarkers = ({ hiddenUserId }: { hiddenUserId: string | null }) => {
     })
   }
 
+  // First name, with "(You)" appended for the current user.
+  const nameLabel = (m: BaseMarker) => {
+    const first = m.userName ? m.userName.trim().split(' ')[0] : ''
+    if (m.userId === user?.uid) return first ? `${first} (You)` : 'You'
+    return first || 'Anonymous'
+  }
+
   return (
     <>
       {placed.map((m) => (
@@ -167,6 +177,7 @@ const UserMarkers = ({ hiddenUserId }: { hiddenUserId: string | null }) => {
         >
           <Popup>
             <div className="flex flex-col items-center">
+              <div className="font-semibold">{nameLabel(m)}</div>
               <div>
                 {m.city}, {m.country}
               </div>

@@ -15,7 +15,7 @@ export const TRAVEL_MODES: {
   { value: 'train', label: 'Train', icon: '🚆' },
   { value: 'bus', label: 'Bus', icon: '🚌' },
   { value: 'plane', label: 'Plane', icon: '✈️' },
-  { value: 'ship', label: 'Ship', icon: '`🚢' },
+  { value: 'ship', label: 'Ship', icon: '🚢' },
   { value: 'car', label: 'Car', icon: '🚗' },
   { value: 'walk', label: 'Walk', icon: '🚶' },
   { value: 'other', label: 'Other', icon: '🚊' },
