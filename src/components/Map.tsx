@@ -3,7 +3,7 @@
 import 'leaflet/dist/leaflet.css'
 
 import L from 'leaflet'
-import { useEffect, useRef } from 'react'
+import { useEffect, useReducer, useRef } from 'react'
 import { MapContainer, Marker, Popup, TileLayer, useMap } from 'react-leaflet'
 
 import { useAuth } from '@/lib/AuthContext'
@@ -82,8 +82,106 @@ const LocationMarker = () => {
   )
 }
 
+type BaseMarker = {
+  userId: string
+  photoURL: string | null
+  lat: number
+  lng: number
+  city: string
+  country: string
+  createdAt: Date
+}
+
+// Distance (in pixels) each avatar is pushed from the shared center when
+// several users share the same city.
+const SPREAD_RADIUS_PX = 8
+
+const UserMarkers = () => {
+  const map = useMap()
+  const { locationData } = useLocations()
+  // Re-render on zoom so the pixel-based spread stays correct at every zoom.
+  const [, forceRerender] = useReducer((n: number) => n + 1, 0)
+
+  useEffect(() => {
+    map.on('zoomend', forceRerender)
+    return () => {
+      map.off('zoomend', forceRerender)
+    }
+  }, [map])
+
+  // One marker per user: their most recent location.
+  const base: BaseMarker[] = []
+  for (const u of locationData) {
+    const loc = u.locations?.[0]
+    if (!loc) continue
+    base.push({
+      userId: u.userId,
+      photoURL: u.photoURL,
+      lat: loc.latitude,
+      lng: loc.longitude,
+      city: loc.city,
+      country: loc.country,
+      createdAt:
+        loc.createdAt instanceof Date ? loc.createdAt : loc.createdAt.toDate(),
+    })
+  }
+
+  // Group users that share (rounded) coordinates — i.e. the same city.
+  // (Plain object, not a Map — the component is named `Map` and shadows it.)
+  const groups: Record<string, BaseMarker[]> = {}
+  for (const m of base) {
+    const key = `${m.lat.toFixed(4)},${m.lng.toFixed(4)}`
+    ;(groups[key] ??= []).push(m)
+  }
+
+  const zoom = map.getZoom()
+  const placed: (BaseMarker & { renderLat: number; renderLng: number })[] = []
+  for (const arr of Object.values(groups)) {
+    if (arr.length === 1) {
+      placed.push({ ...arr[0], renderLat: arr[0].lat, renderLng: arr[0].lng })
+      continue
+    }
+    // Fan the group out into a circle around the shared center, using pixel
+    // offsets so the spacing looks consistent regardless of zoom.
+    const center = map.project([arr[0].lat, arr[0].lng], zoom)
+    const radius = SPREAD_RADIUS_PX + arr.length * 2
+    arr.forEach((m, i) => {
+      const angle = (2 * Math.PI * i) / arr.length
+      const point = L.point(
+        center.x + radius * Math.cos(angle),
+        center.y + radius * Math.sin(angle)
+      )
+      const ll = map.unproject(point, zoom)
+      placed.push({ ...m, renderLat: ll.lat, renderLng: ll.lng })
+    })
+  }
+
+  return (
+    <>
+      {placed.map((m) => (
+        <Marker
+          key={m.userId}
+          position={[m.renderLat, m.renderLng]}
+          icon={createUserIcon(m.photoURL)}
+        >
+          <Popup>
+            <div className="flex flex-col items-center">
+              <div>
+                {m.city}, {m.country}
+              </div>
+              <div className="text-xs text-gray-500">
+                Last seen: {m.createdAt.toLocaleString()}
+              </div>
+            </div>
+          </Popup>
+        </Marker>
+      ))}
+    </>
+  )
+}
+
 const Map = () => {
-  const { locationData, isLoading } = useLocations()
+  const { isLoading } = useLocations()
 
   if (isLoading) {
     return (
@@ -106,32 +204,7 @@ const Map = () => {
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
         <LocationMarker />
-        {/* Add markers for each user's last position */}
-        {locationData.map((userData) => {
-          // Check if userData.locations is empty
-          if (!userData.locations || userData.locations.length === 0) {
-            return null
-          }
-          const lastLocation = userData.locations[0]
-          return (
-            <Marker
-              key={userData.userId}
-              position={[lastLocation.latitude, lastLocation.longitude]}
-              icon={createUserIcon(userData.photoURL)}
-            >
-              <Popup>
-                <div className="flex flex-col items-center">
-                  <div>
-                    {lastLocation.city}, {lastLocation.country}
-                  </div>
-                  <div className="text-xs text-gray-500">
-                    Last seen: {lastLocation.createdAt.toLocaleString()}
-                  </div>
-                </div>
-              </Popup>
-            </Marker>
-          )
-        })}
+        <UserMarkers />
       </MapContainer>
     </div>
   )
