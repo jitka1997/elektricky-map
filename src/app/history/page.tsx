@@ -235,7 +235,7 @@ const HistoryPage = () => {
 
                 {/* Location Listings */}
                 {!isCollapsed && (
-                  <div className="divide-base-200 divide-y">
+                  <div className="divide-base-300 max-h-[55vh] divide-y overflow-y-auto">
                     {locations.map((location, locationIndex) => {
                       const date = new Date(location.createdAt.toLocaleString())
                       const formattedDate = date.toLocaleDateString()
