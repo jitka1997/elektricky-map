@@ -15,6 +15,8 @@ import {
   updateDoc,
 } from 'firebase/firestore'
 
+import { TravelMode } from '@/lib/travel'
+
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
   authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
@@ -58,6 +60,9 @@ export type LocationEntry = {
   latitude: number
   longitude: number
   createdAt: Date | Timestamp
+  // How the user travelled to reach this location. Optional: older entries
+  // (logged before this feature) won't have it.
+  travelMode?: TravelMode
 }
 
 type WriteUserToFirestoreType = {
@@ -106,6 +111,7 @@ type UpdateLocationInFirestoreType = {
     country: string
     latitude: number
     longitude: number
+    travelMode: TravelMode
   }
 }
 
@@ -164,6 +170,7 @@ async function getUserLocations(userId: string) {
         latitude: data.latitude,
         longitude: data.longitude,
         createdAt: data.createdAt.toDate(),
+        travelMode: data.travelMode,
       })
     })
 

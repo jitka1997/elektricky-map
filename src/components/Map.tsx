@@ -3,11 +3,12 @@
 import 'leaflet/dist/leaflet.css'
 
 import L from 'leaflet'
-import { useEffect, useReducer, useRef } from 'react'
+import { useEffect, useReducer, useRef, useState } from 'react'
 import { MapContainer, Marker, Popup, TileLayer, useMap } from 'react-leaflet'
 
 import { useAuth } from '@/lib/AuthContext'
 import { useLocations } from '@/lib/LocationContext'
+import { travelIcon, travelImage, TravelMode } from '@/lib/travel'
 
 // Function to create custom icon from user's photo URL
 const createUserIcon = (photoURL: string | null) => {
@@ -71,14 +72,12 @@ const LocationMarker = () => {
   }
 
   return (
-    <div className="absolute top-2 right-2 z-[1000]">
-      <button
-        onClick={flyToMyLocation}
-        className="btn btn-primary btn-xs rounded-full"
-      >
-        Fly to my location
-      </button>
-    </div>
+    <button
+      onClick={flyToMyLocation}
+      className="btn btn-neutral btn-xs pointer-events-auto rounded-full"
+    >
+      Fly to my location
+    </button>
   )
 }
 
@@ -96,7 +95,7 @@ type BaseMarker = {
 // several users share the same city.
 const SPREAD_RADIUS_PX = 8
 
-const UserMarkers = () => {
+const UserMarkers = ({ hiddenUserId }: { hiddenUserId: string | null }) => {
   const map = useMap()
   const { locationData } = useLocations()
   // Re-render on zoom so the pixel-based spread stays correct at every zoom.
@@ -109,9 +108,11 @@ const UserMarkers = () => {
     }
   }, [map])
 
-  // One marker per user: their most recent location.
+  // One marker per user: their most recent location. The user whose journey is
+  // currently playing is hidden so only their animated marker shows.
   const base: BaseMarker[] = []
   for (const u of locationData) {
+    if (u.userId === hiddenUserId) continue
     const loc = u.locations?.[0]
     if (!loc) continue
     base.push({
@@ -180,8 +181,250 @@ const UserMarkers = () => {
   )
 }
 
+// A marker showing the current travel mode (custom image or emoji), used by the
+// journey player.
+const makeModeIcon = (mode?: TravelMode) => {
+  const image = travelImage(mode)
+  const inner = image
+    ? `<img src="${image}" alt="" style="width:28px;height:28px;object-fit:contain;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.45))" />`
+    : `<div style="font-size:26px;line-height:1;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.45))">${travelIcon(mode)}</div>`
+  return L.divIcon({
+    html: inner,
+    className: 'journey-marker',
+    iconSize: [30, 30],
+    iconAnchor: [15, 15],
+  })
+}
+
+const lerp = (a: L.LatLng, b: L.LatLng, t: number) =>
+  L.latLng(a.lat + (b.lat - a.lat) * t, a.lng + (b.lng - a.lng) * t)
+
+// Control point for a quadratic bezier that bows a flight path sideways.
+const arcControl = (a: L.LatLng, b: L.LatLng) => {
+  const dLat = b.lat - a.lat
+  const dLng = b.lng - a.lng
+  const curve = 0.18
+  return L.latLng(
+    (a.lat + b.lat) / 2 - dLng * curve,
+    (a.lng + b.lng) / 2 + dLat * curve
+  )
+}
+
+const bezier = (a: L.LatLng, c: L.LatLng, b: L.LatLng, t: number) => {
+  const mt = 1 - t
+  return L.latLng(
+    mt * mt * a.lat + 2 * mt * t * c.lat + t * t * b.lat,
+    mt * mt * a.lng + 2 * mt * t * c.lng + t * t * b.lng
+  )
+}
+
+type JourneyStop = { lat: number; lng: number; travelMode?: TravelMode }
+
+// Overlay control + animated playback of a user's journey through their stops.
+const Journey = ({
+  onActiveChange,
+}: {
+  onActiveChange: (userId: string | null) => void
+}) => {
+  const map = useMap()
+  const { user } = useAuth()
+  const { locationData } = useLocations()
+  const [selectedUserId, setSelectedUserId] = useState('')
+  const [playing, setPlaying] = useState(false)
+
+  // A journey needs at least two stops to draw a path.
+  const journeyUsers = locationData.filter(
+    (u) => (u.locations?.length ?? 0) >= 2
+  )
+
+  const resolvedId =
+    selectedUserId ||
+    journeyUsers.find((u) => u.userId === user?.uid)?.userId ||
+    journeyUsers[0]?.userId ||
+    ''
+
+  const selected = locationData.find((u) => u.userId === resolvedId)
+  // Oldest -> newest; each stop's travelMode is how the user reached it.
+  const stops: JourneyStop[] = selected
+    ? [...selected.locations].reverse().map((l) => ({
+        lat: l.latitude,
+        lng: l.longitude,
+        travelMode: l.travelMode,
+      }))
+    : []
+
+  const stopsRef = useRef(stops)
+  stopsRef.current = stops
+
+  useEffect(() => {
+    if (!playing) return
+    const path = stopsRef.current
+    if (path.length < 2) return
+
+    const legs = path.slice(0, -1).map((s, i) => {
+      const from = L.latLng(s.lat, s.lng)
+      const to = L.latLng(path[i + 1].lat, path[i + 1].lng)
+      const mode = path[i + 1].travelMode
+      const distKm = from.distanceTo(to) / 1000
+      return {
+        from,
+        to,
+        mode,
+        isPlane: mode === 'plane',
+        control: arcControl(from, to),
+        duration: Math.min(4500, Math.max(1200, distKm * 1.2)),
+      }
+    })
+
+    const trail: L.LatLng[] = [legs[0].from]
+    // Colour comes from the `.journey-trail` CSS rule (theme accent) rather
+    // than a fixed value — see globals.css.
+    const polyline = L.polyline(trail, {
+      className: 'journey-trail',
+      weight: 3,
+      opacity: 0.85,
+    }).addTo(map)
+    const marker = L.marker(legs[0].from, {
+      icon: makeModeIcon(legs[0].mode),
+      interactive: false,
+      zIndexOffset: 1000,
+    }).addTo(map)
+
+    // Smoothly frame the current leg: zoom out for long hops, in for short
+    // ones (kept modest via maxZoom so short legs aren't over-zoomed). Plane
+    // legs include the arc peak so it stays in view.
+    const frameLeg = (leg: (typeof legs)[number]) => {
+      const pts: L.LatLngExpression[] = leg.isPlane
+        ? [leg.from, leg.to, leg.control]
+        : [leg.from, leg.to]
+      map.flyToBounds(L.latLngBounds(pts), {
+        padding: [90, 90],
+        maxZoom: 5,
+        duration: 0.8,
+      })
+    }
+
+    // Pause the marker/trail while the map is moving. Extending the polyline
+    // mid-zoom makes it render out of place, so we only advance the animation
+    // once the camera has settled. Framing only triggers a move at the start of
+    // a leg, so no-op moves (bounds already in view) simply never pause.
+    let paused = false
+    const onMoveStart = () => {
+      paused = true
+    }
+    const onMoveEnd = () => {
+      paused = false
+      legStart = null // restart the leg's travel timer after the camera settles
+    }
+    map.on('movestart', onMoveStart)
+    map.on('moveend', onMoveEnd)
+
+    let legIndex = 0
+    let shownLeg = -1
+    let legStart: number | null = null
+    let raf = 0
+    let cancelled = false
+
+    const step = (now: number) => {
+      if (cancelled) return
+      const leg = legs[legIndex]
+
+      // Entering a new leg: snap to its start, frame it, and let the pause
+      // engage before travelling.
+      if (shownLeg !== legIndex) {
+        marker.setIcon(makeModeIcon(leg.mode))
+        marker.setLatLng(leg.from)
+        shownLeg = legIndex
+        legStart = null
+        frameLeg(leg)
+        raf = requestAnimationFrame(step)
+        return
+      }
+
+      if (paused) {
+        raf = requestAnimationFrame(step)
+        return
+      }
+
+      if (legStart === null) legStart = now
+      const t = Math.min(1, (now - legStart) / leg.duration)
+      const pos = leg.isPlane
+        ? bezier(leg.from, leg.control, leg.to, t)
+        : lerp(leg.from, leg.to, t)
+      marker.setLatLng(pos)
+      trail.push(pos)
+      polyline.setLatLngs(trail)
+      if (t >= 1) {
+        legIndex++
+        legStart = null
+        if (legIndex >= legs.length) {
+          setPlaying(false)
+          onActiveChange(null)
+          return
+        }
+      }
+      raf = requestAnimationFrame(step)
+    }
+    raf = requestAnimationFrame(step)
+
+    return () => {
+      cancelled = true
+      cancelAnimationFrame(raf)
+      map.off('movestart', onMoveStart)
+      map.off('moveend', onMoveEnd)
+      map.removeLayer(polyline)
+      map.removeLayer(marker)
+    }
+    // Only (re)run when playback is toggled; stops are captured via the ref.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playing])
+
+  if (journeyUsers.length === 0) return null
+
+  const userLabel = (u: (typeof journeyUsers)[number]) => {
+    if (u.userId === user?.uid) return 'You'
+    const first = u.userName ? u.userName.trim().split(' ')[0] : ''
+    return first || 'Anonymous'
+  }
+
+  return (
+    <div className="rounded-box bg-base-100/90 pointer-events-auto flex items-center gap-1.5 p-1.5 shadow-md">
+      <select
+        className="select select-bordered select-xs sm:select-sm max-w-24 sm:max-w-40"
+        value={resolvedId}
+        disabled={playing}
+        onChange={(e) => setSelectedUserId(e.target.value)}
+      >
+        {journeyUsers.map((u) => (
+          <option key={u.userId} value={u.userId}>
+            {userLabel(u)}
+          </option>
+        ))}
+      </select>
+      <button
+        type="button"
+        className="btn btn-neutral btn-xs sm:btn-sm"
+        onClick={() => {
+          if (playing) {
+            setPlaying(false)
+            onActiveChange(null)
+          } else {
+            setPlaying(true)
+            onActiveChange(resolvedId)
+          }
+        }}
+      >
+        {playing ? '■ Stop' : '▶ Play'}
+        <span className="hidden sm:inline"> journey</span>
+      </button>
+    </div>
+  )
+}
+
 const Map = () => {
   const { isLoading } = useLocations()
+  // The user whose journey is currently animating (their static pin is hidden).
+  const [playingUserId, setPlayingUserId] = useState<string | null>(null)
 
   if (isLoading) {
     return (
@@ -203,8 +446,13 @@ const Map = () => {
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
-        <LocationMarker />
-        <UserMarkers />
+        <UserMarkers hiddenUserId={playingUserId} />
+        {/* Top-right control stack — flexbox spacing so the gap is consistent
+            across screen sizes regardless of each control's height. */}
+        <div className="pointer-events-none absolute top-2 right-2 z-[1000] flex flex-col items-end gap-2">
+          <Journey onActiveChange={setPlayingUserId} />
+          <LocationMarker />
+        </div>
       </MapContainer>
     </div>
   )

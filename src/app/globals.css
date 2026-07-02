@@ -10,6 +10,13 @@
   --font-mono: var(--font-geist-mono);
 }
 
+/* Journey playback trail on the map — themed via the accent color. Set here
+   (CSS) rather than via Leaflet's `color` option, which writes the SVG stroke
+   as a presentation attribute where var() wouldn't resolve. */
+.journey-trail {
+  stroke: var(--color-accent);
+}
+
 /* Body colors are driven by the daisyUI theme via the `bg-base-100
    text-base-content` classes on <body> (see layout.tsx), so they respect the
    theme override. Don't set color/background here — an unlayered rule would

@@ -5,6 +5,8 @@ import { useEffect, useState } from 'react'
 
 import CitySearch from '@/components/CitySearch'
 import Container from '@/components/Container'
+import TravelModeIcon from '@/components/TravelModeIcon'
+import TravelModePicker from '@/components/TravelModePicker'
 import UserIcon from '@/components/UserIcon'
 import { useAuth } from '@/lib/AuthContext'
 import {
@@ -14,6 +16,7 @@ import {
   writeLocationToFirestore,
 } from '@/lib/firebase'
 import { useLocations } from '@/lib/LocationContext'
+import { DEFAULT_TRAVEL_MODE, TravelMode } from '@/lib/travel'
 import { CityOption } from '@/lib/utils'
 
 const HistoryPage = () => {
@@ -39,12 +42,14 @@ const HistoryPage = () => {
     null
   )
   const [editCity, setEditCity] = useState<CityOption | null>(null)
+  const [editMode, setEditMode] = useState<TravelMode>(DEFAULT_TRAVEL_MODE)
   const [isSaving, setIsSaving] = useState(false)
   // Manual add-entry modal: whether it's open, the picked city, the chosen
   // date/time (datetime-local string), and whether the save is in flight.
   const [addOpen, setAddOpen] = useState(false)
   const [addCity, setAddCity] = useState<CityOption | null>(null)
   const [addDateTime, setAddDateTime] = useState('')
+  const [addMode, setAddMode] = useState<TravelMode>(DEFAULT_TRAVEL_MODE)
   const [isAdding, setIsAdding] = useState(false)
 
   useEffect(() => {
@@ -101,6 +106,7 @@ const HistoryPage = () => {
   const openAdd = () => {
     setAddCity(null)
     setAddDateTime(toDateTimeLocal(new Date()))
+    setAddMode(DEFAULT_TRAVEL_MODE)
     setAddOpen(true)
   }
 
@@ -122,6 +128,7 @@ const HistoryPage = () => {
       country: addCity.country,
       latitude: addCity.latitude,
       longitude: addCity.longitude,
+      travelMode: addMode,
     }
     try {
       // Firestore converts a JS Date to a Timestamp on write.
@@ -150,6 +157,7 @@ const HistoryPage = () => {
       latitude: location.latitude,
       longitude: location.longitude,
     })
+    setEditMode(location.travelMode ?? DEFAULT_TRAVEL_MODE)
   }
 
   const closeEdit = () => {
@@ -157,12 +165,13 @@ const HistoryPage = () => {
     setEditCity(null)
   }
 
-  // Whether the picked city differs from the location being edited.
+  // Whether the picked city or travel mode differs from the edited location.
   const editChanged = !!(
     editCity &&
     editingLocation &&
     (editCity.city !== editingLocation.city ||
-      editCity.country !== editingLocation.country)
+      editCity.country !== editingLocation.country ||
+      editMode !== (editingLocation.travelMode ?? DEFAULT_TRAVEL_MODE))
   )
 
   // The locations adjacent to the one being edited. Locations are newest-first,
@@ -220,6 +229,7 @@ const HistoryPage = () => {
       country: editCity.country,
       latitude: editCity.latitude,
       longitude: editCity.longitude,
+      travelMode: editMode,
     }
     try {
       await updateLocationInFirestore({
@@ -348,6 +358,10 @@ const HistoryPage = () => {
                           <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
                             <div>
                               <h3 className="text-lg font-medium">
+                                <TravelModeIcon
+                                  mode={location.travelMode}
+                                  className="mr-1"
+                                />
                                 {location.city}, {location.country}
                               </h3>
                               <div className="flex items-center text-sm opacity-70">
@@ -421,11 +435,14 @@ const HistoryPage = () => {
         <div className="modal-box overflow-visible">
           <h3 className="mb-4 text-lg font-bold">Edit location</h3>
           {editingLocation && (
-            <CitySearch
-              key={editingLocation.id}
-              value={editCity}
-              onSelect={setEditCity}
-            />
+            <div className="flex flex-col gap-3">
+              <CitySearch
+                key={editingLocation.id}
+                value={editCity}
+                onSelect={setEditCity}
+              />
+              <TravelModePicker value={editMode} onChange={setEditMode} />
+            </div>
           )}
           {matchesAdjacent && (
             <div className="text-base-content/70 mt-2 text-sm">
@@ -475,6 +492,7 @@ const HistoryPage = () => {
                   className="input input-bordered text-base-content w-full"
                 />
               </label>
+              <TravelModePicker value={addMode} onChange={setAddMode} />
             </div>
           )}
           {addAdjacentSame && (

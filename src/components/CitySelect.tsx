@@ -5,13 +5,16 @@ import React, { useState } from 'react'
 
 import CitySearch from '@/components/CitySearch'
 import Container from '@/components/Container'
+import TravelModePicker from '@/components/TravelModePicker'
 import { useAuth } from '@/lib/AuthContext'
 import { writeLocationToFirestore } from '@/lib/firebase'
 import { useLocations } from '@/lib/LocationContext'
+import { DEFAULT_TRAVEL_MODE, TravelMode } from '@/lib/travel'
 import { CityOption } from '@/lib/utils'
 
 const LocationSelect: React.FC = () => {
   const [selectedCity, setSelectedCity] = useState<CityOption | null>(null)
+  const [travelMode, setTravelMode] = useState<TravelMode>(DEFAULT_TRAVEL_MODE)
   const [isUploading, setIsUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   // Bumped after a successful submit to remount CitySearch and clear its input.
@@ -46,6 +49,7 @@ const LocationSelect: React.FC = () => {
         country: selectedCity.country,
         latitude: selectedCity.latitude,
         longitude: selectedCity.longitude,
+        travelMode,
       }
 
       const id = await writeLocationToFirestore({
@@ -65,6 +69,7 @@ const LocationSelect: React.FC = () => {
       )
 
       setSelectedCity(null)
+      setTravelMode(DEFAULT_TRAVEL_MODE)
       setResetKey((k) => k + 1)
       // Fly the map to the freshly logged pin.
       requestFlyToMyLocation()
@@ -94,6 +99,9 @@ const LocationSelect: React.FC = () => {
           >
             {isUploading ? 'Uploading...' : 'Update Location'}
           </button>
+        </div>
+        <div className="mt-3">
+          <TravelModePicker value={travelMode} onChange={setTravelMode} />
         </div>
         {isAlreadyHere && (
           <div className="text-base-content/70 mt-2 text-sm">
