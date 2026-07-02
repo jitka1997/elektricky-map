@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useId, useRef, useState } from 'react'
 
 import {
   CityOption,
@@ -27,6 +27,11 @@ const CitySearch: React.FC<Props> = ({ value, onSelect }) => {
   const [isSearching, setIsSearching] = useState(false)
   const [isLocating, setIsLocating] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Index of the keyboard-highlighted suggestion (-1 = none).
+  const [activeIndex, setActiveIndex] = useState(-1)
+
+  const listId = useId()
+  const optionId = (i: number) => `${listId}-opt-${i}`
 
   // Keep the latest selection in a ref so the blur handler (which fires after a
   // delay) can read the current value rather than a stale closure.
@@ -41,6 +46,7 @@ const CitySearch: React.FC<Props> = ({ value, onSelect }) => {
     // Nothing to search for, or the box already shows the selected city.
     if (q.length < 2 || (value && q === formatCity(value))) {
       setSuggestions([])
+      setActiveIndex(-1)
       setIsSearching(false)
       return
     }
@@ -49,8 +55,10 @@ const CitySearch: React.FC<Props> = ({ value, onSelect }) => {
     const timer = setTimeout(async () => {
       try {
         setSuggestions(await searchCities(q, { limit: 6 }))
+        setActiveIndex(-1)
       } catch {
         setSuggestions([])
+        setActiveIndex(-1)
       } finally {
         setIsSearching(false)
       }
@@ -59,10 +67,15 @@ const CitySearch: React.FC<Props> = ({ value, onSelect }) => {
     return () => clearTimeout(timer)
   }, [query, value])
 
+  const closeSuggestions = () => {
+    setSuggestions([])
+    setActiveIndex(-1)
+  }
+
   const pickSuggestion = (city: CityOption) => {
     onSelect(city)
     setQuery(formatCity(city))
-    setSuggestions([])
+    closeSuggestions()
   }
 
   // Fill the select with the user's detected city (a one-shot action, not a
@@ -106,14 +119,56 @@ const CitySearch: React.FC<Props> = ({ value, onSelect }) => {
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setError(null)
     setQuery(e.target.value)
+    setActiveIndex(-1)
     // Editing the text invalidates any previously selected city.
     if (value) onSelect(null)
   }
 
   const clearInput = () => {
     setQuery('')
-    setSuggestions([])
+    closeSuggestions()
     onSelect(null)
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    switch (e.key) {
+      case 'ArrowDown':
+        if (suggestions.length === 0) return
+        e.preventDefault()
+        setActiveIndex((i) => (i + 1) % suggestions.length)
+        break
+      case 'ArrowUp':
+        if (suggestions.length === 0) return
+        e.preventDefault()
+        setActiveIndex((i) => (i <= 0 ? suggestions.length - 1 : i - 1))
+        break
+      case 'Enter':
+        if (activeIndex >= 0 && activeIndex < suggestions.length) {
+          e.preventDefault()
+          pickSuggestion(suggestions[activeIndex])
+        }
+        break
+      case 'Escape':
+        // First close the dropdown; if it's already closed, clear the field.
+        if (suggestions.length > 0) {
+          e.preventDefault()
+          closeSuggestions()
+        } else if (query) {
+          e.preventDefault()
+          clearInput()
+        }
+        break
+      case 'Home':
+        if (suggestions.length === 0) return
+        e.preventDefault()
+        setActiveIndex(0)
+        break
+      case 'End':
+        if (suggestions.length === 0) return
+        e.preventDefault()
+        setActiveIndex(suggestions.length - 1)
+        break
+    }
   }
 
   // Select-like behaviour: if focus leaves with no valid selection, drop any
@@ -122,10 +177,12 @@ const CitySearch: React.FC<Props> = ({ value, onSelect }) => {
     setTimeout(() => {
       if (!valueRef.current) {
         setQuery('')
-        setSuggestions([])
+        closeSuggestions()
       }
     }, 150)
   }
+
+  const isOpen = suggestions.length > 0
 
   return (
     <div className="flex w-full flex-col gap-1">
@@ -145,8 +202,16 @@ const CitySearch: React.FC<Props> = ({ value, onSelect }) => {
           onChange={handleInputChange}
           onFocus={(e) => e.target.select()}
           onBlur={handleBlur}
+          onKeyDown={handleKeyDown}
           placeholder="Search for a city..."
           className="input input-bordered text-base-content placeholder:text-base-content/50 w-full pr-10"
+          role="combobox"
+          aria-expanded={isOpen}
+          aria-controls={listId}
+          aria-autocomplete="list"
+          aria-activedescendant={
+            activeIndex >= 0 ? optionId(activeIndex) : undefined
+          }
         />
 
         {isSearching && (
@@ -163,11 +228,24 @@ const CitySearch: React.FC<Props> = ({ value, onSelect }) => {
           </button>
         )}
 
-        {suggestions.length > 0 && (
-          <ul className="menu bg-base-100 rounded-box absolute z-20 mt-1 w-full shadow-lg">
+        {isOpen && (
+          <ul
+            id={listId}
+            role="listbox"
+            className="menu bg-base-100 rounded-box absolute z-20 mt-1 w-full shadow-lg"
+          >
             {suggestions.map((city, index) => (
               <li key={`${formatCity(city)}-${index}`}>
-                <button type="button" onClick={() => pickSuggestion(city)}>
+                <button
+                  type="button"
+                  id={optionId(index)}
+                  role="option"
+                  aria-selected={index === activeIndex}
+                  onMouseEnter={() => setActiveIndex(index)}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => pickSuggestion(city)}
+                  className={index === activeIndex ? 'bg-base-300' : ''}
+                >
                   {formatCity(city)}
                 </button>
               </li>
