@@ -133,7 +133,7 @@ const CitySearch: React.FC<Props> = ({ value, onSelect }) => {
         type="button"
         onClick={fillFromLocation}
         disabled={isLocating}
-        className="link link-primary w-fit text-sm"
+        className="link text-base-content w-fit text-sm"
       >
         {isLocating ? 'Finding your location...' : '📍 Use my current location'}
       </button>
@@ -146,7 +146,7 @@ const CitySearch: React.FC<Props> = ({ value, onSelect }) => {
           onFocus={(e) => e.target.select()}
           onBlur={handleBlur}
           placeholder="Search for a city..."
-          className="input input-bordered w-full pr-10"
+          className="input input-bordered text-base-content placeholder:text-base-content/50 w-full pr-10"
         />
 
         {isSearching && (
