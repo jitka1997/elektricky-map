@@ -99,12 +99,18 @@ export const LocationProvider = ({ children }: { children: ReactNode }) => {
     location: LocationEntry,
     userMeta?: { userName: string | null; photoURL: string | null }
   ) => {
+    // Sort newest-first so a manually-added past entry lands in the right slot.
+    const toMillis = (d: LocationEntry['createdAt']) =>
+      d instanceof Date ? d.getTime() : d.toMillis()
+    const byNewest = (a: LocationEntry, b: LocationEntry) =>
+      toMillis(b.createdAt) - toMillis(a.createdAt)
+
     setLocationData((prev) => {
       const exists = prev.some((u) => u.userId === userId)
       if (exists) {
         return prev.map((u) =>
           u.userId === userId
-            ? { ...u, locations: [location, ...u.locations] }
+            ? { ...u, locations: [location, ...u.locations].sort(byNewest) }
             : u
         )
       }

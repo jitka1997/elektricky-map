@@ -11,6 +11,7 @@ import {
   deleteLocationFromFirestore,
   LocationEntry,
   updateLocationInFirestore,
+  writeLocationToFirestore,
 } from '@/lib/firebase'
 import { useLocations } from '@/lib/LocationContext'
 import { CityOption } from '@/lib/utils'
@@ -22,6 +23,7 @@ const HistoryPage = () => {
     isLoading: locationsLoading,
     removeLocation,
     updateLocation,
+    addLocation,
   } = useLocations()
   const router = useRouter()
 
@@ -38,6 +40,12 @@ const HistoryPage = () => {
   )
   const [editCity, setEditCity] = useState<CityOption | null>(null)
   const [isSaving, setIsSaving] = useState(false)
+  // Manual add-entry modal: whether it's open, the picked city, the chosen
+  // date/time (datetime-local string), and whether the save is in flight.
+  const [addOpen, setAddOpen] = useState(false)
+  const [addCity, setAddCity] = useState<CityOption | null>(null)
+  const [addDateTime, setAddDateTime] = useState('')
+  const [isAdding, setIsAdding] = useState(false)
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -84,6 +92,56 @@ const HistoryPage = () => {
     }
   }
 
+  // Format a Date for a datetime-local input value (local time, no seconds).
+  const toDateTimeLocal = (d: Date) => {
+    const pad = (n: number) => String(n).padStart(2, '0')
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+  }
+
+  const openAdd = () => {
+    setAddCity(null)
+    setAddDateTime(toDateTimeLocal(new Date()))
+    setAddOpen(true)
+  }
+
+  const closeAdd = () => {
+    setAddOpen(false)
+    setAddCity(null)
+    setAddDateTime('')
+  }
+
+  const saveAdd = async () => {
+    if (!addCity || !addDateTime || addAdjacentSame) return
+    const when = new Date(addDateTime)
+    if (isNaN(when.getTime())) return
+
+    setIsAdding(true)
+    const base = {
+      userId: user.uid,
+      city: addCity.city,
+      country: addCity.country,
+      latitude: addCity.latitude,
+      longitude: addCity.longitude,
+    }
+    try {
+      // Firestore converts a JS Date to a Timestamp on write.
+      const id = await writeLocationToFirestore({
+        userId: user.uid,
+        locationData: { ...base, createdAt: when },
+      })
+      addLocation(
+        user.uid,
+        { ...base, id, createdAt: when },
+        { userName: user.displayName, photoURL: user.photoURL }
+      )
+      closeAdd()
+    } catch {
+      window.alert('Failed to add location. Please try again.')
+    } finally {
+      setIsAdding(false)
+    }
+  }
+
   const openEdit = (location: LocationEntry) => {
     setEditingLocation(location)
     setEditCity({
@@ -120,17 +178,38 @@ const HistoryPage = () => {
   const newerLocation =
     editingIndex >= 1 ? myLocations[editingIndex - 1] : undefined
 
-  const sameCity = (loc?: LocationEntry) =>
+  const cityMatchesLoc = (city: CityOption | null, loc?: LocationEntry) =>
     !!(
-      editCity &&
+      city &&
       loc &&
-      editCity.city.trim().toLowerCase() === loc.city.trim().toLowerCase() &&
-      editCity.country.trim().toLowerCase() === loc.country.trim().toLowerCase()
+      city.city.trim().toLowerCase() === loc.city.trim().toLowerCase() &&
+      city.country.trim().toLowerCase() === loc.country.trim().toLowerCase()
     )
 
   // Block saving if the picked city matches either adjacent location, which
   // would create a redundant consecutive duplicate.
-  const matchesAdjacent = sameCity(olderLocation) || sameCity(newerLocation)
+  const matchesAdjacent =
+    cityMatchesLoc(editCity, olderLocation) ||
+    cityMatchesLoc(editCity, newerLocation)
+
+  // Same guard for the add modal: find the entries the chosen date/time would
+  // sit between (locations are newest-first) and block a same-city neighbour.
+  const toMillis = (d: LocationEntry['createdAt']) =>
+    d instanceof Date ? d.getTime() : d.toMillis()
+  const addAdjacentSame = (() => {
+    const t = addDateTime ? new Date(addDateTime).getTime() : NaN
+    if (!addCity || isNaN(t)) return false
+    let newer: LocationEntry | undefined
+    let older: LocationEntry | undefined
+    for (const loc of myLocations) {
+      if (toMillis(loc.createdAt) > t) newer = loc
+      else {
+        older = loc
+        break
+      }
+    }
+    return cityMatchesLoc(addCity, newer) || cityMatchesLoc(addCity, older)
+  })()
 
   const saveEdit = async () => {
     if (!editingLocation?.id || !editCity || !editChanged || matchesAdjacent)
@@ -201,37 +280,57 @@ const HistoryPage = () => {
             >
               <div className="card-body p-0">
                 {/* User Header — click to collapse/expand */}
-                <button
-                  type="button"
-                  onClick={() => toggleExpanded(cardId)}
-                  aria-expanded={!isCollapsed}
-                  className="bg-base-300 hover:bg-base-300/70 flex w-full items-center gap-3 p-4 text-left transition-colors"
-                >
-                  <UserIcon photoURL={photoURL} />
-                  <div className="flex-1">
-                    <h2 className="card-title">{title}</h2>
-                    <p className="text-sm opacity-70">
-                      {locations.length} location
-                      {locations.length !== 1 ? 's' : ''} logged
-                    </p>
-                  </div>
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    strokeWidth={2}
-                    stroke="currentColor"
-                    className={`h-5 w-5 transition-transform ${
-                      isCollapsed ? '' : 'rotate-180'
-                    }`}
+                <div className="bg-base-300 flex w-full items-center gap-2 p-4">
+                  <button
+                    type="button"
+                    onClick={() => toggleExpanded(cardId)}
+                    aria-expanded={!isCollapsed}
+                    className="flex flex-1 items-center gap-3 text-left transition-opacity hover:opacity-80"
                   >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="m19.5 8.25-7.5 7.5-7.5-7.5"
-                    />
-                  </svg>
-                </button>
+                    <UserIcon photoURL={photoURL} />
+                    <div className="flex-1">
+                      <h2 className="card-title">{title}</h2>
+                      <p className="text-sm opacity-70">
+                        {locations.length} location
+                        {locations.length !== 1 ? 's' : ''} logged
+                      </p>
+                    </div>
+                  </button>
+                  {isOwn && (
+                    <button
+                      type="button"
+                      onClick={openAdd}
+                      aria-label="Add a location entry"
+                      title="Add entry"
+                      className="btn btn-outline btn-sm btn-circle text-lg"
+                    >
+                      +
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => toggleExpanded(cardId)}
+                    aria-label={isCollapsed ? 'Expand' : 'Collapse'}
+                    className="ml-3 transition-opacity hover:opacity-80"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      strokeWidth={2}
+                      stroke="currentColor"
+                      className={`h-5 w-5 transition-transform ${
+                        isCollapsed ? '' : 'rotate-180'
+                      }`}
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="m19.5 8.25-7.5 7.5-7.5-7.5"
+                      />
+                    </svg>
+                  </button>
+                </div>
 
                 {/* Location Listings */}
                 {!isCollapsed && (
@@ -357,6 +456,56 @@ const HistoryPage = () => {
           className="modal-backdrop"
           aria-label="Close"
           onClick={() => !isSaving && closeEdit()}
+        />
+      </div>
+
+      {/* Manual add-entry modal */}
+      <div className={`modal ${addOpen ? 'modal-open' : ''}`}>
+        <div className="modal-box overflow-visible">
+          <h3 className="mb-4 text-lg font-bold">Add location</h3>
+          {addOpen && (
+            <div className="flex flex-col gap-3">
+              <CitySearch value={addCity} onSelect={setAddCity} />
+              <label className="form-control w-full">
+                <span className="label-text mb-1 text-sm">Date &amp; time</span>
+                <input
+                  type="datetime-local"
+                  value={addDateTime}
+                  onChange={(e) => setAddDateTime(e.target.value)}
+                  className="input input-bordered text-base-content w-full"
+                />
+              </label>
+            </div>
+          )}
+          {addAdjacentSame && (
+            <div className="text-base-content/70 mt-2 text-sm">
+              Same as an adjacent entry — pick a different city or time.
+            </div>
+          )}
+          <div className="modal-action">
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={closeAdd}
+              disabled={isAdding}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={saveAdd}
+              disabled={isAdding || !addCity || !addDateTime || addAdjacentSame}
+            >
+              {isAdding ? 'Adding...' : 'Add'}
+            </button>
+          </div>
+        </div>
+        <button
+          type="button"
+          className="modal-backdrop"
+          aria-label="Close"
+          onClick={() => !isAdding && closeAdd()}
         />
       </div>
     </Container>
