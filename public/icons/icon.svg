@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Full-bleed background (platforms round/mask it); tram kept within the
+       central safe zone so it also works as a maskable icon. -->
+  <rect width="512" height="512" fill="#c1121f" />
+
+  <!-- Pantograph (the electric pickup — "električky") -->
+  <g stroke="#f4ede2" stroke-width="9" stroke-linecap="round" fill="none">
+    <path d="M256 92 L206 150" />
+    <path d="M256 92 L306 150" />
+    <line x1="200" y1="92" x2="312" y2="92" />
+  </g>
+
+  <!-- Tram body -->
+  <rect x="150" y="150" width="212" height="244" rx="44" fill="#f4ede2" />
+
+  <!-- Window band -->
+  <rect x="174" y="182" width="164" height="92" rx="20" fill="#37506b" />
+  <line x1="256" y1="182" x2="256" y2="274" stroke="#f4ede2" stroke-width="9" />
+
+  <!-- Door seam -->
+  <line
+    x1="256"
+    y1="296"
+    x2="256"
+    y2="394"
+    stroke="#c1121f"
+    stroke-width="7"
+  />
+
+  <!-- Headlights -->
+  <circle cx="192" cy="360" r="13" fill="#ffd166" />
+  <circle cx="320" cy="360" r="13" fill="#ffd166" />
+</svg>

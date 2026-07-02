@@ -17,7 +17,7 @@ import {
   useState,
 } from 'react'
 
-import { auth, writeUserToFirestore } from '@/lib/firebase'
+import { auth, checkUserAccess, writeUserToFirestore } from '@/lib/firebase'
 
 interface AuthContextType {
   user: User | null
@@ -46,34 +46,35 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         return
       }
 
-      // Upsert the user doc on every sign-in. This doubles as the allowlist
-      // check: the rules only permit this write for invited users, so a
-      // permission-denied here means the user isn't on the guest list.
+      // Check invite-allowlist membership with a READ of the user's own doc.
+      // A read resolves offline from cache (for returning users) — unlike a
+      // write, which would hang while offline — and online the rules reject it
+      // with permission-denied for anyone not on the guest list.
       try {
-        await writeUserToFirestore({
-          userId: user.uid,
-          userData: {
-            userId: user.uid,
-            displayName: user.displayName,
-            email: user.email,
-            photoURL: user.photoURL,
-            lastLogin: serverTimestamp() as unknown as Timestamp,
-          },
-        })
+        await checkUserAccess(user.uid)
         setAuthorized(true)
       } catch (error) {
         const code = (error as { code?: string }).code
-        if (code === 'permission-denied') {
-          setAuthorized(false)
-        } else {
-          // Network/other error — don't lock the user out over it; the data is
-          // protected by the rules regardless.
-          console.error('Error writing user data:', error)
-          setAuthorized(true)
-        }
+        // Only a permission-denied means "not invited"; other errors (network,
+        // offline-uncached) shouldn't lock the user out — data is protected by
+        // the rules regardless.
+        setAuthorized(code === 'permission-denied' ? false : true)
       }
 
       setLoading(false)
+
+      // Upsert profile / lastLogin in the background. Not awaited: offline this
+      // write queues and would otherwise hang, and it must not block the gate.
+      writeUserToFirestore({
+        userId: user.uid,
+        userData: {
+          userId: user.uid,
+          displayName: user.displayName,
+          email: user.email,
+          photoURL: user.photoURL,
+          lastLogin: serverTimestamp() as unknown as Timestamp,
+        },
+      }).catch((error) => console.error('Error writing user data:', error))
     })
 
     return () => unsubscribe()

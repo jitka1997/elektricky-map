@@ -6,9 +6,13 @@ import {
   collection,
   deleteDoc,
   doc,
+  getDoc,
   getDocs,
   getFirestore,
+  initializeFirestore,
   orderBy,
+  persistentLocalCache,
+  persistentMultipleTabManager,
   query,
   setDoc,
   Timestamp,
@@ -40,7 +44,24 @@ if (typeof window !== 'undefined') {
 }
 
 const auth = getAuth(app)
-const db = getFirestore(app)
+
+// In the browser, enable IndexedDB offline persistence (multi-tab safe) so
+// previously-loaded data is available offline. On the server, a plain instance.
+const db =
+  typeof window !== 'undefined'
+    ? initializeFirestore(app, {
+        localCache: persistentLocalCache({
+          tabManager: persistentMultipleTabManager(),
+        }),
+      })
+    : getFirestore(app)
+
+// Read the user's own doc to check invite-allowlist membership. Online, the
+// rules reject this with permission-denied for users who aren't invited;
+// offline, it resolves from the local cache for returning (invited) users.
+const checkUserAccess = async (userId: string) => {
+  await getDoc(doc(db, 'users', userId))
+}
 
 type UserEntry = {
   userId: string
@@ -233,6 +254,7 @@ export {
   analytics,
   app,
   auth,
+  checkUserAccess,
   db,
   deleteLocationFromFirestore,
   getAllLocations,

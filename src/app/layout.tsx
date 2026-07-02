@@ -1,9 +1,11 @@
 import './globals.css'
 
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
 
+import InstallHint from '@/components/InstallHint'
 import PageWrapper from '@/components/PageWrapper'
+import ServiceWorkerRegister from '@/components/ServiceWorkerRegister'
 import { AuthProvider } from '@/lib/AuthContext'
 import { LocationProvider } from '@/lib/LocationContext'
 
@@ -20,6 +22,20 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: 'Električky Map',
   description: 'Best tool to see where your fellow Električky are',
+  // Next serves the web app manifest from app/manifest.ts automatically.
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'default',
+    title: 'Električky',
+  },
+  icons: {
+    icon: '/favicon-32x32.png',
+    apple: '/icons/apple-touch-icon.png',
+  },
+}
+
+export const viewport: Viewport = {
+  themeColor: '#c1121f',
 }
 
 export default function RootLayout({
@@ -54,6 +70,8 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} bg-base-100 text-base-content antialiased`}
       >
+        <ServiceWorkerRegister />
+        <InstallHint />
         <AuthProvider>
           <LocationProvider>
             <PageWrapper>{children}</PageWrapper>
