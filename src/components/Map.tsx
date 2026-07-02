@@ -194,18 +194,55 @@ const UserMarkers = ({ hiddenUserId }: { hiddenUserId: string | null }) => {
 }
 
 // A marker showing the current travel mode (custom image or emoji), used by the
-// journey player.
+// journey player. The glyph sits in a `.journey-glyph` span that gets rotated /
+// flipped to face the travel direction (see orientGlyph).
 const makeModeIcon = (mode?: TravelMode) => {
   const image = travelImage(mode)
-  const inner = image
-    ? `<img src="${image}" alt="" style="width:28px;height:28px;object-fit:contain;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.45))" />`
-    : `<div style="font-size:26px;line-height:1;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.45))">${travelIcon(mode)}</div>`
+  const glyph = image
+    ? `<img src="${image}" alt="" style="width:28px;height:28px;object-fit:contain" />`
+    : `<div style="font-size:26px;line-height:1">${travelIcon(mode)}</div>`
   return L.divIcon({
-    html: inner,
+    html: `<span class="journey-glyph" style="display:inline-block;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.45));transition:transform 0.08s linear">${glyph}</span>`,
     className: 'journey-marker',
     iconSize: [30, 30],
     iconAnchor: [15, 15],
   })
+}
+
+// How the moving icon orients to the travel direction:
+//   rotate — nose follows the heading (plane)
+//   flip   — face left/right only, never upside down (side-view vehicles)
+//   none   — front-view icons stay upright (train, tram/other)
+const TURN: Record<TravelMode, 'rotate' | 'flip' | 'none'> = {
+  plane: 'rotate',
+  car: 'flip',
+  bus: 'flip',
+  ship: 'flip',
+  walk: 'flip',
+  train: 'none',
+  other: 'none',
+}
+
+// Orient a glyph element from the on-screen travel direction (dx, dy pixels).
+const orientGlyph = (
+  el: HTMLElement,
+  mode: TravelMode | undefined,
+  dx: number,
+  dy: number
+) => {
+  const turn = TURN[mode ?? 'other']
+  if (turn === 'rotate') {
+    // The plane emoji rests pointing north-east (~-45°); offset so its nose
+    // follows the heading.
+    el.style.transform = `rotate(${(Math.atan2(dy, dx) * 180) / Math.PI + 45}deg)`
+  } else if (turn === 'flip') {
+    // Vehicle emojis face left by default; mirror when travelling rightward.
+    // Keep the current facing while moving near-vertically (dx ~ 0).
+    if (dx > 0.5) el.style.transform = 'scaleX(-1)'
+    else if (dx < -0.5) el.style.transform = 'scaleX(1)'
+  } else {
+    el.style.transform = ''
+  }
 }
 
 const lerp = (a: L.LatLng, b: L.LatLng, t: number) =>
@@ -366,6 +403,21 @@ const Journey = ({
       marker.setLatLng(pos)
       trail.push(pos)
       polyline.setLatLngs(trail)
+
+      // Point the glyph along the travel direction (sampled on screen).
+      const glyph = marker.getElement()?.querySelector('.journey-glyph')
+      if (glyph instanceof HTMLElement) {
+        const eps = 0.02
+        const a = leg.isPlane
+          ? bezier(leg.from, leg.control, leg.to, Math.max(0, t - eps))
+          : lerp(leg.from, leg.to, Math.max(0, t - eps))
+        const b = leg.isPlane
+          ? bezier(leg.from, leg.control, leg.to, Math.min(1, t + eps))
+          : lerp(leg.from, leg.to, Math.min(1, t + eps))
+        const pa = map.latLngToContainerPoint(a)
+        const pb = map.latLngToContainerPoint(b)
+        orientGlyph(glyph, leg.mode, pb.x - pa.x, pb.y - pa.y)
+      }
       if (t >= 1) {
         legIndex++
         legStart = null
