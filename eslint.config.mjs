@@ -21,6 +21,16 @@ const eslintConfig = [
       'import/no-duplicates': 'error',
     },
   },
+  // React Compiler rules turned on by eslint-config-next 16.4. The flagged code
+  // (Date.now() in render, resetting state in an effect, a ref synced during
+  // render) works correctly, so keep them visible without blocking commits.
+  {
+    rules: {
+      'react-hooks/purity': 'warn',
+      'react-hooks/refs': 'warn',
+      'react-hooks/set-state-in-effect': 'warn',
+    },
+  },
   // Must be last: turns off any ESLint formatting rules that would conflict
   // with Prettier, so Prettier is the single source of truth for formatting.
   eslintConfigPrettier,
