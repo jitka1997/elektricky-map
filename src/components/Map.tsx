@@ -10,6 +10,7 @@ import { useAuth } from '@/lib/AuthContext'
 import { formatDate, formatTime } from '@/lib/dates'
 import { useLocations } from '@/lib/LocationContext'
 import { pastLocations } from '@/lib/locations'
+import { shortName } from '@/lib/names'
 import { travelIcon, travelImage, TravelMode } from '@/lib/travel'
 
 // Function to create custom icon from user's photo URL
@@ -88,6 +89,7 @@ const LocationMarker = () => {
 type BaseMarker = {
   userId: string
   userName: string | null
+  customName: string | null
   photoURL: string | null
   lat: number
   lng: number
@@ -126,6 +128,7 @@ const UserMarkers = ({ hiddenUserId }: { hiddenUserId: string | null }) => {
     base.push({
       userId: u.userId,
       userName: u.userName,
+      customName: u.customName ?? null,
       photoURL: u.photoURL,
       lat: loc.latitude,
       lng: loc.longitude,
@@ -168,7 +171,7 @@ const UserMarkers = ({ hiddenUserId }: { hiddenUserId: string | null }) => {
 
   // First name, with "(You)" appended for the current user.
   const nameLabel = (m: BaseMarker) => {
-    const first = m.userName ? m.userName.trim().split(' ')[0] : ''
+    const first = shortName(m.userName, m.customName)
     if (m.userId === user?.uid) return first ? `${first} (You)` : 'You'
     return first || 'Anonymous'
   }
@@ -454,8 +457,7 @@ const Journey = ({
 
   const userLabel = (u: (typeof journeyUsers)[number]) => {
     if (u.userId === user?.uid) return 'You'
-    const first = u.userName ? u.userName.trim().split(' ')[0] : ''
-    return first || 'Anonymous'
+    return shortName(u.userName, u.customName) || 'Anonymous'
   }
 
   return (

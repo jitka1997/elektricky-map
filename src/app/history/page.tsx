@@ -18,6 +18,7 @@ import {
 } from '@/lib/firebase'
 import { useLocations } from '@/lib/LocationContext'
 import { isFuture, neighborsAt, sameCity } from '@/lib/locations'
+import { shortName } from '@/lib/names'
 import { DEFAULT_TRAVEL_MODE, TravelMode } from '@/lib/travel'
 import { CityOption } from '@/lib/utils'
 
@@ -264,12 +265,12 @@ const HistoryPage = () => {
       <div className="space-y-10">
         {usersWithLocations.map((userData, userIndex) => {
           // User information
-          const { userId, userName, photoURL, locations } = userData
+          const { userId, userName, customName, photoURL, locations } = userData
           const cardId = userId || String(userIndex)
           const isCollapsed = !expanded.has(cardId)
           const isOwn = userId === user.uid
 
-          const firstName = userName ? userName.trim().split(' ')[0] : ''
+          const firstName = shortName(userName, customName)
           const title = isOwn
             ? firstName
               ? `${firstName} (You)`

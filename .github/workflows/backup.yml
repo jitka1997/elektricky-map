@@ -1,0 +1,53 @@
+name: Nightly Firestore backup
+
+on:
+  schedule:
+    - cron: '0 3 * * *' # every day at 03:00 UTC
+  workflow_dispatch: # allow running it manually from the Actions tab
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Export Firestore
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/backup"
+          cp scripts/backup-firestore.mjs "$RUNNER_TEMP/backup/"
+          cd "$RUNNER_TEMP/backup"
+          npm init -y > /dev/null
+          npm install firebase-admin --no-audit --no-fund
+          node backup-firestore.mjs backup.json
+
+      # The repo is public, so artifacts are downloadable by anyone signed in
+      # to GitHub — encrypt the snapshot before uploading it.
+      - name: Encrypt
+        env:
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          if [ -z "$BACKUP_PASSPHRASE" ]; then
+            echo "BACKUP_PASSPHRASE secret is not set" >&2
+            exit 1
+          fi
+          cd "$RUNNER_TEMP/backup"
+          echo "$BACKUP_PASSPHRASE" | gpg --batch --yes --pinentry-mode loopback \
+            --passphrase-fd 0 --symmetric --cipher-algo AES256 \
+            -o "elektricky-backup-$(date -u +%F).json.gpg" backup.json
+          rm backup.json
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: elektricky-backup-${{ github.run_number }}
+          path: ${{ runner.temp }}/backup/*.json.gpg
+          retention-days: 90
+          if-no-files-found: error

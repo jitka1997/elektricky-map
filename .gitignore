@@ -39,3 +39,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Firestore backups contain everyone's data — never commit them (public repo)
+*backup*.json
+*.json.gpg

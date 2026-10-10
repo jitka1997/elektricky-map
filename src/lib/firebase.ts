@@ -5,6 +5,7 @@ import {
   addDoc,
   collection,
   deleteDoc,
+  deleteField,
   doc,
   getDoc,
   getDocs,
@@ -69,6 +70,10 @@ type UserEntry = {
   email: string | null
   photoURL: string | null
   lastLogin: Timestamp | null
+  // User-chosen overrides (set on the profile page). Kept separate from the
+  // Google displayName/photoURL, which are refreshed on every sign-in.
+  customName?: string | null
+  customPhoto?: string | null
 }
 
 export type LocationEntry = {
@@ -228,6 +233,8 @@ async function getAllUsers() {
         email: data.email,
         photoURL: data.photoURL,
         lastLogin: data.lastLogin,
+        customName: data.customName ?? null,
+        customPhoto: data.customPhoto ?? null,
       })
     })
 
@@ -244,13 +251,81 @@ async function getAllLocations() {
     const locations = await getUserLocations(user.userId)
     return {
       userId: user.userId,
-      userName: user.displayName,
-      photoURL: user.photoURL,
+      // Profile overrides win over the Google name/photo.
+      userName: user.customName || user.displayName,
+      photoURL: user.customPhoto || user.photoURL,
+      customName: user.customName ?? null,
+      customPhoto: user.customPhoto ?? null,
       lastLogin: user.lastLogin,
       locations,
     }
   })
   return allLocations
+}
+
+type UpdateUserProfileType = {
+  userId: string
+  // null clears the override (falls back to the Google value).
+  customName: string | null
+  customPhoto: string | null
+}
+
+const updateUserProfile = async ({
+  userId,
+  customName,
+  customPhoto,
+}: UpdateUserProfileType) => {
+  await setDoc(
+    doc(db, 'users', userId),
+    {
+      customName: customName ?? deleteField(),
+      customPhoto: customPhoto ?? deleteField(),
+    },
+    { merge: true }
+  )
+}
+
+// Convert Firestore Timestamps to { __timestamp: ISO } so a backup is plain
+// JSON that a restore script can turn back into Timestamps.
+const serializeForBackup = (value: unknown): unknown => {
+  if (value && typeof value === 'object') {
+    if (typeof (value as { toDate?: unknown }).toDate === 'function') {
+      return {
+        __timestamp: (value as { toDate: () => Date }).toDate().toISOString(),
+      }
+    }
+    if (Array.isArray(value)) return value.map(serializeForBackup)
+    return Object.fromEntries(
+      Object.entries(value).map(([k, v]) => [k, serializeForBackup(v)])
+    )
+  }
+  return value
+}
+
+/** Every user doc and all their locations, as restorable JSON (format v1). */
+const exportAllData = async () => {
+  const usersSnap = await getDocs(collection(db, 'users'))
+  const users = await Promise.all(
+    usersSnap.docs.map(async (userDoc) => {
+      const locSnap = await getDocs(
+        collection(db, 'users', userDoc.id, 'locations')
+      )
+      return {
+        id: userDoc.id,
+        data: serializeForBackup(userDoc.data()),
+        locations: locSnap.docs.map((d) => ({
+          id: d.id,
+          data: serializeForBackup(d.data()),
+        })),
+      }
+    })
+  )
+  return {
+    app: 'elektricky-map',
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    users,
+  }
 }
 
 export {
@@ -260,8 +335,10 @@ export {
   checkUserAccess,
   db,
   deleteLocationFromFirestore,
+  exportAllData,
   getAllLocations,
   updateLocationInFirestore,
+  updateUserProfile,
   writeLocationToFirestore,
   writeUserToFirestore,
 }

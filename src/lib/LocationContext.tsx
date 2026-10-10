@@ -16,6 +16,7 @@ interface LocationContextType {
   locationData: LocationData[]
   refreshLocations: () => Promise<void>
   removeLocation: (userId: string, locationId: string) => void
+  updateUserLocally: (userId: string, changes: Partial<LocationData>) => void
   updateLocation: (
     userId: string,
     locationId: string,
@@ -69,6 +70,28 @@ export const LocationProvider = ({ children }: { children: ReactNode }) => {
             }
           : u
       )
+    )
+  }
+
+  // Update a user's fields (e.g. profile name/photo) in local state.
+  const updateUserLocally = (
+    userId: string,
+    changes: Partial<LocationData>
+  ) => {
+    setLocationData((prev) =>
+      prev.some((u) => u.userId === userId)
+        ? prev.map((u) => (u.userId === userId ? { ...u, ...changes } : u))
+        : [
+            ...prev,
+            {
+              userId,
+              userName: null,
+              photoURL: null,
+              lastLogin: null,
+              locations: [],
+              ...changes,
+            },
+          ]
     )
   }
 
@@ -153,6 +176,7 @@ export const LocationProvider = ({ children }: { children: ReactNode }) => {
         locationData,
         refreshLocations,
         removeLocation,
+        updateUserLocally,
         updateLocation,
         addLocation,
         flySignal,
