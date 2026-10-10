@@ -12,9 +12,9 @@ jobs:
   backup:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
 
@@ -45,7 +45,7 @@ jobs:
             -o "elektricky-backup-$(date -u +%F).json.gpg" backup.json
           rm backup.json
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: elektricky-backup-${{ github.run_number }}
           path: ${{ runner.temp }}/backup/*.json.gpg
