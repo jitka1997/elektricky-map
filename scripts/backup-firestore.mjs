@@ -4,7 +4,8 @@
 // "Download backup" (restore with scripts/restore-firestore.mjs).
 //
 // Usage: FIREBASE_SERVICE_ACCOUNT="$(cat key.json)" node backup-firestore.mjs out.json
-// Needs `firebase-admin` resolvable from this file's directory.
+// Needs `firebase-admin` resolvable from this file's directory — run it from a
+// separate folder (see restore-firestore.mjs), not from inside the app.
 import { writeFileSync } from 'node:fs'
 
 import { cert, initializeApp } from 'firebase-admin/app'
