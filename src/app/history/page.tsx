@@ -9,7 +9,7 @@ import TravelModeIcon from '@/components/TravelModeIcon'
 import TravelModePicker from '@/components/TravelModePicker'
 import UserIcon from '@/components/UserIcon'
 import { useAuth } from '@/lib/AuthContext'
-import { formatDate, formatTime } from '@/lib/dates'
+import { formatDate, formatTime, toDate, toDateTimeLocal } from '@/lib/dates'
 import {
   deleteLocationFromFirestore,
   LocationEntry,
@@ -17,6 +17,7 @@ import {
   writeLocationToFirestore,
 } from '@/lib/firebase'
 import { useLocations } from '@/lib/LocationContext'
+import { isFuture, neighborsAt, sameCity } from '@/lib/locations'
 import { DEFAULT_TRAVEL_MODE, TravelMode } from '@/lib/travel'
 import { CityOption } from '@/lib/utils'
 
@@ -44,6 +45,7 @@ const HistoryPage = () => {
   )
   const [editCity, setEditCity] = useState<CityOption | null>(null)
   const [editMode, setEditMode] = useState<TravelMode>(DEFAULT_TRAVEL_MODE)
+  const [editDateTime, setEditDateTime] = useState('')
   const [isSaving, setIsSaving] = useState(false)
   // Manual add-entry modal: whether it's open, the picked city, the chosen
   // date/time (datetime-local string), and whether the save is in flight.
@@ -96,12 +98,6 @@ const HistoryPage = () => {
     } finally {
       setIsDeleting(false)
     }
-  }
-
-  // Format a Date for a datetime-local input value (local time, no seconds).
-  const toDateTimeLocal = (d: Date) => {
-    const pad = (n: number) => String(n).padStart(2, '0')
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
   }
 
   const openAdd = () => {
@@ -159,66 +155,61 @@ const HistoryPage = () => {
       longitude: location.longitude,
     })
     setEditMode(location.travelMode ?? DEFAULT_TRAVEL_MODE)
+    setEditDateTime(toDateTimeLocal(toDate(location.createdAt)))
   }
 
   const closeEdit = () => {
     setEditingLocation(null)
     setEditCity(null)
+    setEditDateTime('')
   }
 
-  // Whether the picked city or travel mode differs from the edited location.
+  const myLocations =
+    locationData.find((u) => u.userId === user.uid)?.locations ?? []
+  // Reference time for marking entries logged in the future as "upcoming".
+  const now = Date.now()
+
+  // Edit: the time only counts as changed if the picker value differs from the
+  // original (minute precision), so an untouched time keeps its exact seconds.
+  const editTimeChanged = !!(
+    editingLocation &&
+    editDateTime &&
+    editDateTime !== toDateTimeLocal(toDate(editingLocation.createdAt))
+  )
+  const editTime = editTimeChanged
+    ? new Date(editDateTime).getTime()
+    : editingLocation
+      ? toDate(editingLocation.createdAt).getTime()
+      : NaN
+
+  // Whether the picked city, travel mode or time differs from the original.
   const editChanged = !!(
     editCity &&
     editingLocation &&
     (editCity.city !== editingLocation.city ||
       editCity.country !== editingLocation.country ||
-      editMode !== (editingLocation.travelMode ?? DEFAULT_TRAVEL_MODE))
+      editMode !== (editingLocation.travelMode ?? DEFAULT_TRAVEL_MODE) ||
+      editTimeChanged)
   )
 
-  // The locations adjacent to the one being edited. Locations are newest-first,
-  // so the older (chronologically previous) neighbour is the next index and the
-  // newer one is the previous index.
-  const myLocations =
-    locationData.find((u) => u.userId === user.uid)?.locations ?? []
-  const editingIndex = editingLocation
-    ? myLocations.findIndex((l) => l.id === editingLocation.id)
-    : -1
-  const olderLocation =
-    editingIndex >= 0 ? myLocations[editingIndex + 1] : undefined
-  const newerLocation =
-    editingIndex >= 1 ? myLocations[editingIndex - 1] : undefined
-
-  const cityMatchesLoc = (city: CityOption | null, loc?: LocationEntry) =>
-    !!(
-      city &&
-      loc &&
-      city.city.trim().toLowerCase() === loc.city.trim().toLowerCase() &&
-      city.country.trim().toLowerCase() === loc.country.trim().toLowerCase()
+  // Block saving if the picked city matches the entry right before or after
+  // the (possibly new) time, which would create a consecutive duplicate.
+  const matchesAdjacent = (() => {
+    if (!editingLocation || isNaN(editTime)) return false
+    const { newer, older } = neighborsAt(
+      myLocations,
+      editTime,
+      editingLocation.id
     )
+    return sameCity(editCity, newer) || sameCity(editCity, older)
+  })()
 
-  // Block saving if the picked city matches either adjacent location, which
-  // would create a redundant consecutive duplicate.
-  const matchesAdjacent =
-    cityMatchesLoc(editCity, olderLocation) ||
-    cityMatchesLoc(editCity, newerLocation)
-
-  // Same guard for the add modal: find the entries the chosen date/time would
-  // sit between (locations are newest-first) and block a same-city neighbour.
-  const toMillis = (d: LocationEntry['createdAt']) =>
-    d instanceof Date ? d.getTime() : d.toMillis()
+  // Same guard for the add modal.
   const addAdjacentSame = (() => {
     const t = addDateTime ? new Date(addDateTime).getTime() : NaN
     if (!addCity || isNaN(t)) return false
-    let newer: LocationEntry | undefined
-    let older: LocationEntry | undefined
-    for (const loc of myLocations) {
-      if (toMillis(loc.createdAt) > t) newer = loc
-      else {
-        older = loc
-        break
-      }
-    }
-    return cityMatchesLoc(addCity, newer) || cityMatchesLoc(addCity, older)
+    const { newer, older } = neighborsAt(myLocations, t)
+    return sameCity(addCity, newer) || sameCity(addCity, older)
   })()
 
   const saveEdit = async () => {
@@ -231,6 +222,7 @@ const HistoryPage = () => {
       latitude: editCity.latitude,
       longitude: editCity.longitude,
       travelMode: editMode,
+      ...(editTimeChanged ? { createdAt: new Date(editDateTime) } : {}),
     }
     try {
       await updateLocationInFirestore({
@@ -363,6 +355,11 @@ const HistoryPage = () => {
                               </h3>
                               <div className="flex items-center text-sm opacity-70">
                                 {formattedDate} • {formattedTime}
+                                {isFuture(location, now) && (
+                                  <span className="badge badge-outline badge-sm ml-2">
+                                    upcoming
+                                  </span>
+                                )}
                               </div>
                             </div>
                             {isOwn && location.id && (
@@ -427,10 +424,10 @@ const HistoryPage = () => {
         />
       </div>
 
-      {/* Edit location modal */}
+      {/* Edit entry modal */}
       <div className={`modal ${editingLocation ? 'modal-open' : ''}`}>
         <div className="modal-box overflow-visible">
-          <h3 className="mb-4 text-lg font-bold">Edit location</h3>
+          <h3 className="mb-4 text-lg font-bold">Edit entry</h3>
           {editingLocation && (
             <div className="flex flex-col gap-3">
               <CitySearch
@@ -438,12 +435,21 @@ const HistoryPage = () => {
                 value={editCity}
                 onSelect={setEditCity}
               />
+              <label className="form-control w-full">
+                <span className="label-text mb-1 text-sm">Date &amp; time</span>
+                <input
+                  type="datetime-local"
+                  value={editDateTime}
+                  onChange={(e) => setEditDateTime(e.target.value)}
+                  className="input input-bordered text-base-content w-full"
+                />
+              </label>
               <TravelModePicker value={editMode} onChange={setEditMode} />
             </div>
           )}
           {matchesAdjacent && (
             <div className="text-base-content/70 mt-2 text-sm">
-              Same as an adjacent location — pick a different city.
+              Same as an adjacent entry — pick a different city or time.
             </div>
           )}
           <div className="modal-action">

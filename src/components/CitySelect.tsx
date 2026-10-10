@@ -7,14 +7,19 @@ import CitySearch from '@/components/CitySearch'
 import Container from '@/components/Container'
 import TravelModePicker from '@/components/TravelModePicker'
 import { useAuth } from '@/lib/AuthContext'
+import { toDateTimeLocal } from '@/lib/dates'
 import { writeLocationToFirestore } from '@/lib/firebase'
 import { useLocations } from '@/lib/LocationContext'
+import { neighborsAt, sameCity } from '@/lib/locations'
 import { DEFAULT_TRAVEL_MODE, TravelMode } from '@/lib/travel'
 import { CityOption } from '@/lib/utils'
 
 const LocationSelect: React.FC = () => {
   const [selectedCity, setSelectedCity] = useState<CityOption | null>(null)
   const [travelMode, setTravelMode] = useState<TravelMode>(DEFAULT_TRAVEL_MODE)
+  // Logs default to "now"; the user can opt in to a custom date/time.
+  const [customTime, setCustomTime] = useState(false)
+  const [dateTime, setDateTime] = useState('')
   const [isUploading, setIsUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   // Bumped after a successful submit to remount CitySearch and clear its input.
@@ -22,18 +27,23 @@ const LocationSelect: React.FC = () => {
   const { user } = useAuth()
   const { addLocation, locationData, requestFlyToMyLocation } = useLocations()
 
-  // The user's most recent logged location, and whether the currently selected
-  // city is that same place (logging it again would be a no-op duplicate).
-  const myLatest = locationData.find((u) => u.userId === user?.uid)
-    ?.locations?.[0]
-  const isAlreadyHere = !!(
-    selectedCity &&
-    myLatest &&
-    selectedCity.city.trim().toLowerCase() ===
-      myLatest.city.trim().toLowerCase() &&
-    selectedCity.country.trim().toLowerCase() ===
-      myLatest.country.trim().toLowerCase()
-  )
+  // The time this entry would be logged at (now, unless changed).
+  const logTime = customTime ? new Date(dateTime).getTime() : Date.now()
+
+  // Block a consecutive duplicate: the picked city matches the entry right
+  // before or after the log time.
+  const myLocations =
+    locationData.find((u) => u.userId === user?.uid)?.locations ?? []
+  const isAdjacentSame = (() => {
+    if (!selectedCity || isNaN(logTime)) return false
+    const { newer, older } = neighborsAt(myLocations, logTime)
+    return sameCity(selectedCity, newer) || sameCity(selectedCity, older)
+  })()
+
+  const startCustomTime = () => {
+    setDateTime(toDateTimeLocal(new Date()))
+    setCustomTime(true)
+  }
 
   const submitLocationToFirestore = async () => {
     setError(null)
@@ -41,7 +51,9 @@ const LocationSelect: React.FC = () => {
       setIsUploading(true)
       if (!user) throw new Error('User not authenticated')
       if (!selectedCity) throw new Error('No city selected')
-      if (isAlreadyHere) throw new Error('You are already in this location')
+      if (isAdjacentSame) throw new Error('Same as an adjacent entry')
+      if (isNaN(logTime)) throw new Error('Invalid date/time')
+      const when = customTime ? new Date(dateTime) : null
 
       const newLocation = {
         userId: user.uid,
@@ -56,7 +68,8 @@ const LocationSelect: React.FC = () => {
         userId: user.uid,
         locationData: {
           ...newLocation,
-          createdAt: serverTimestamp() as unknown as Timestamp,
+          // Server time for "now"; Firestore converts a custom Date itself.
+          createdAt: when ?? (serverTimestamp() as unknown as Timestamp),
         },
       })
 
@@ -64,12 +77,13 @@ const LocationSelect: React.FC = () => {
       // without refetching everything. Use a local Date for display.
       addLocation(
         user.uid,
-        { ...newLocation, id, createdAt: new Date() },
+        { ...newLocation, id, createdAt: when ?? new Date() },
         { userName: user.displayName, photoURL: user.photoURL }
       )
 
       setSelectedCity(null)
       setTravelMode(DEFAULT_TRAVEL_MODE)
+      setCustomTime(false)
       setResetKey((k) => k + 1)
       // Fly the map to the freshly logged pin.
       requestFlyToMyLocation()
@@ -94,7 +108,9 @@ const LocationSelect: React.FC = () => {
           </div>
           <button
             onClick={submitLocationToFirestore}
-            disabled={!selectedCity || isUploading || isAlreadyHere}
+            disabled={
+              !selectedCity || isUploading || isAdjacentSame || isNaN(logTime)
+            }
             className="btn btn-primary"
           >
             {isUploading ? 'Uploading...' : 'Update Location'}
@@ -103,9 +119,42 @@ const LocationSelect: React.FC = () => {
         <div className="mt-3">
           <TravelModePicker value={travelMode} onChange={setTravelMode} />
         </div>
-        {isAlreadyHere && (
+        <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
+          <span className="label-text">When:</span>
+          {customTime ? (
+            <>
+              <input
+                type="datetime-local"
+                value={dateTime}
+                onChange={(e) => setDateTime(e.target.value)}
+                className="input input-bordered input-sm text-base-content w-auto"
+              />
+              <button
+                type="button"
+                onClick={() => setCustomTime(false)}
+                className="link text-base-content"
+              >
+                Use now
+              </button>
+            </>
+          ) : (
+            <>
+              <span className="font-semibold">Now</span>
+              <button
+                type="button"
+                onClick={startCustomTime}
+                className="link text-base-content"
+              >
+                Change
+              </button>
+            </>
+          )}
+        </div>
+        {isAdjacentSame && (
           <div className="text-base-content/70 mt-2 text-sm">
-            You&apos;re already in {selectedCity?.city}.
+            {customTime
+              ? 'Same as an adjacent entry — pick a different city or time.'
+              : `You're already in ${selectedCity?.city}.`}
           </div>
         )}
       </Container>

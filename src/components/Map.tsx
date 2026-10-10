@@ -9,6 +9,7 @@ import { MapContainer, Marker, Popup, TileLayer, useMap } from 'react-leaflet'
 import { useAuth } from '@/lib/AuthContext'
 import { formatDate, formatTime } from '@/lib/dates'
 import { useLocations } from '@/lib/LocationContext'
+import { pastLocations } from '@/lib/locations'
 import { travelIcon, travelImage, TravelMode } from '@/lib/travel'
 
 // Function to create custom icon from user's photo URL
@@ -46,10 +47,12 @@ const LocationMarker = () => {
   const { locationData, flySignal } = useLocations()
   const didMount = useRef(false)
 
-  // The current user's most recent logged location (locations are ordered
-  // newest-first), or undefined if they have none.
-  const myLocation = locationData.find((u) => u.userId === user?.uid)
-    ?.locations?.[0]
+  // The current user's most recent location up to now (newest-first; future /
+  // planned entries are skipped), or undefined if they have none.
+  const myLocation = pastLocations(
+    locationData.find((u) => u.userId === user?.uid)?.locations ?? [],
+    Date.now()
+  )[0]
 
   // Fly to the user's pin whenever flySignal is bumped (e.g. after logging a
   // new location). Skip the initial mount so it only fires on real requests.
@@ -111,12 +114,14 @@ const UserMarkers = ({ hiddenUserId }: { hiddenUserId: string | null }) => {
     }
   }, [map])
 
-  // One marker per user: their most recent location. The user whose journey is
-  // currently playing is hidden so only their animated marker shows.
+  // One marker per user: their most recent location up to now (future entries
+  // aren't shown). The user whose journey is currently playing is hidden so
+  // only their animated marker shows.
+  const now = Date.now()
   const base: BaseMarker[] = []
   for (const u of locationData) {
     if (u.userId === hiddenUserId) continue
-    const loc = u.locations?.[0]
+    const loc = pastLocations(u.locations ?? [], now)[0]
     if (!loc) continue
     base.push({
       userId: u.userId,
@@ -282,8 +287,10 @@ const Journey = ({
   const [playing, setPlaying] = useState(false)
 
   // A journey needs at least two stops to draw a path.
+  // Future (planned) entries are left out of the journey.
+  const now = Date.now()
   const journeyUsers = locationData.filter(
-    (u) => (u.locations?.length ?? 0) >= 2
+    (u) => pastLocations(u.locations ?? [], now).length >= 2
   )
 
   const resolvedId =
@@ -295,7 +302,7 @@ const Journey = ({
   const selected = locationData.find((u) => u.userId === resolvedId)
   // Oldest -> newest; each stop's travelMode is how the user reached it.
   const stops: JourneyStop[] = selected
-    ? [...selected.locations].reverse().map((l) => ({
+    ? [...pastLocations(selected.locations, now)].reverse().map((l) => ({
         lat: l.latitude,
         lng: l.longitude,
         travelMode: l.travelMode,

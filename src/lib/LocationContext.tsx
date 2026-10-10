@@ -8,6 +8,7 @@ import {
 } from 'react'
 
 import { useAuth } from '@/lib/AuthContext'
+import { toDate } from '@/lib/dates'
 import { getAllLocations, LocationEntry } from '@/lib/firebase'
 import { LocationData } from '@/lib/types'
 
@@ -82,9 +83,14 @@ export const LocationProvider = ({ children }: { children: ReactNode }) => {
         u.userId === userId
           ? {
               ...u,
-              locations: u.locations.map((l) =>
-                l.id === locationId ? { ...l, ...changes } : l
-              ),
+              // Re-sort newest-first: an edited time can move the entry.
+              locations: u.locations
+                .map((l) => (l.id === locationId ? { ...l, ...changes } : l))
+                .sort(
+                  (a, b) =>
+                    toDate(b.createdAt).getTime() -
+                    toDate(a.createdAt).getTime()
+                ),
             }
           : u
       )

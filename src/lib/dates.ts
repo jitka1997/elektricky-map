@@ -15,3 +15,9 @@ export const formatDate = (value: Date | Timestamp): string =>
 /** e.g. "15:30". */
 export const formatTime = (value: Date | Timestamp): string =>
   toDate(value).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+
+/** Format a Date for a `datetime-local` input value (local time, minutes). */
+export const toDateTimeLocal = (d: Date): string => {
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}

@@ -136,6 +136,9 @@ type UpdateLocationInFirestoreType = {
     latitude: number
     longitude: number
     travelMode: TravelMode
+    // Only sent when the time was changed (Firestore stores a Date as a
+    // Timestamp).
+    createdAt?: Date
   }
 }
 
