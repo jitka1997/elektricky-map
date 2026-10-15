@@ -82,9 +82,16 @@ export const enablePush = async (): Promise<PushStatus> => {
     userVisibleOnly: true,
     applicationServerKey: applicationServerKey(),
   })
-  await callApi('/api/push/devices', 'POST', {
-    subscription: subscription.toJSON(),
-  })
+  try {
+    await callApi('/api/push/devices', 'POST', {
+      subscription: subscription.toJSON(),
+    })
+  } catch (error) {
+    // Not saved on the server, so undo it here too: otherwise this device
+    // would look "on" without ever getting anything.
+    await subscription.unsubscribe().catch(() => {})
+    throw error
+  }
   return 'on'
 }
 
