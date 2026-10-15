@@ -86,6 +86,21 @@ const LocationMarker = () => {
   )
 }
 
+// Flies to a place requested from another page (e.g. "Show on map" on the
+// stats page), then clears the request so it only happens once.
+const FlyToTarget = () => {
+  const map = useMap()
+  const { flyTarget, setFlyTarget } = useLocations()
+
+  useEffect(() => {
+    if (!flyTarget) return
+    map.flyTo([flyTarget.lat, flyTarget.lng], 8)
+    setFlyTarget(null)
+  }, [flyTarget, map, setFlyTarget])
+
+  return null
+}
+
 type BaseMarker = {
   userId: string
   userName: string | null
@@ -520,6 +535,7 @@ const Map = () => {
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
         <UserMarkers hiddenUserId={playingUserId} />
+        <FlyToTarget />
         {/* Top-right control stack — flexbox spacing so the gap is consistent
             across screen sizes regardless of each control's height. */}
         <div className="pointer-events-none absolute top-2 right-2 z-[1000] flex flex-col items-end gap-2">

@@ -41,12 +41,15 @@ const NavBar = ({ classname }: Props) => {
       )}
     >
       <Container className="text-base-content bg-base-200 flex items-center justify-between py-2 shadow-md">
-        <div className="text-large flex gap-8 font-semibold">
+        <div className="text-large flex gap-4 font-semibold sm:gap-8">
           <Link href={'/'} className={linkClass('/')}>
             Map
           </Link>
           <Link href={'/history'} className={linkClass('/history')}>
             History
+          </Link>
+          <Link href={'/stats'} className={linkClass('/stats')}>
+            Stats
           </Link>
         </div>
         <div className="text-large flex items-center gap-4 font-semibold">
