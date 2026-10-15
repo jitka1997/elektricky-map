@@ -1,7 +1,7 @@
 'use client'
 
 import { serverTimestamp, Timestamp } from 'firebase/firestore'
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 
 import CitySearch from '@/components/CitySearch'
 import Container from '@/components/Container'
@@ -24,8 +24,14 @@ const LocationSelect: React.FC = () => {
   const [dateTime, setDateTime] = useState('')
   const [isUploading, setIsUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  // After logging: which friends are already in that city.
+  // After logging: which friends are already in that city (a pop-up that
+  // closes itself after a few seconds).
   const [meetMessage, setMeetMessage] = useState<string | null>(null)
+  useEffect(() => {
+    if (!meetMessage) return
+    const timer = setTimeout(() => setMeetMessage(null), 8000)
+    return () => clearTimeout(timer)
+  }, [meetMessage])
   // Bumped after a successful submit to remount CitySearch and clear its input.
   const [resetKey, setResetKey] = useState(0)
   const { user } = useAuth()
@@ -189,19 +195,21 @@ const LocationSelect: React.FC = () => {
       </Container>
       {error && <div className="text-sm text-red-500">{error}</div>}
       {meetMessage && (
-        <div
-          role="status"
-          className="bg-base-200 rounded-box flex items-center justify-between gap-3 px-4 py-3 font-semibold"
-        >
-          <span>{meetMessage}</span>
-          <button
-            type="button"
-            onClick={() => setMeetMessage(null)}
-            className="btn btn-ghost btn-xs"
-            aria-label="Dismiss"
+        <div className="pointer-events-none fixed inset-x-0 top-[72px] z-[2000] flex justify-center px-4">
+          <div
+            role="status"
+            className="bg-neutral text-neutral-content rounded-box pointer-events-auto flex max-w-md animate-[meet-in_0.3s_ease-out] items-center gap-3 px-5 py-4 text-lg font-semibold shadow-xl"
           >
-            ✕
-          </button>
+            <span>{meetMessage}</span>
+            <button
+              type="button"
+              onClick={() => setMeetMessage(null)}
+              className="btn btn-ghost btn-sm btn-circle text-neutral-content"
+              aria-label="Close"
+            >
+              ✕
+            </button>
+          </div>
         </div>
       )}
     </>

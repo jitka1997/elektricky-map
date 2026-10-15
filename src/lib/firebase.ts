@@ -11,16 +11,19 @@ import {
   getDocs,
   getFirestore,
   initializeFirestore,
+  onSnapshot,
   orderBy,
   persistentLocalCache,
   persistentMultipleTabManager,
   query,
+  type QueryDocumentSnapshot,
   setDoc,
   Timestamp,
   updateDoc,
 } from 'firebase/firestore'
 
 import { TravelMode } from '@/lib/travel'
+import type { LocationData } from '@/lib/types'
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -181,86 +184,109 @@ const deleteLocationFromFirestore = async ({
   }
 }
 
-async function getUserLocations(userId: string) {
-  try {
-    // Create a reference to the locations collection
-    const locationsRef = collection(db, 'users', userId, 'locations')
-
-    const q = query(locationsRef, orderBy('createdAt', 'desc'))
-
-    const querySnapshot = await getDocs(q)
-
-    // Map the results to your LocationEntry type
-    const locations: LocationEntry[] = []
-    querySnapshot.forEach((doc) => {
-      const data = doc.data()
-      locations.push({
-        id: doc.id,
-        userId: data.userId,
-        city: data.city,
-        country: data.country,
-        latitude: data.latitude,
-        longitude: data.longitude,
-        createdAt: data.createdAt.toDate(),
-        travelMode: data.travelMode,
-      })
-    })
-
-    return locations
-  } catch (error) {
-    console.error('Error fetching user locations:', error)
-    throw error
+// One user's profile fields, as the app shows them.
+const toUserEntry = (snap: QueryDocumentSnapshot): UserEntry => {
+  const data = snap.data()
+  return {
+    userId: snap.id,
+    displayName: data.displayName,
+    email: data.email,
+    photoURL: data.photoURL,
+    lastLogin: data.lastLogin,
+    customName: data.customName ?? null,
+    customPhoto: data.customPhoto ?? null,
   }
 }
 
-async function getAllUsers() {
-  try {
-    // Create a reference to the users collection
-    const usersRef = collection(db, 'users')
-
-    // Create a query against the collection
-    const q = query(usersRef, orderBy('lastLogin', 'desc'))
-
-    const querySnapshot = await getDocs(q)
-
-    // Map the results to your UserEntry type
-    const users: UserEntry[] = []
-    querySnapshot.forEach((doc) => {
-      const data = doc.data()
-      users.push({
-        userId: data.userId,
-        displayName: data.displayName,
-        email: data.email,
-        photoURL: data.photoURL,
-        lastLogin: data.lastLogin,
-        customName: data.customName ?? null,
-        customPhoto: data.customPhoto ?? null,
-      })
-    })
-
-    return users
-  } catch (error) {
-    console.error('Error fetching all users:', error)
-    throw error
+const toLocationEntry = (snap: QueryDocumentSnapshot): LocationEntry => {
+  // A just-logged entry's server time isn't known yet: use an estimate.
+  const data = snap.data({ serverTimestamps: 'estimate' })
+  return {
+    id: snap.id,
+    userId: data.userId,
+    city: data.city,
+    country: data.country,
+    latitude: data.latitude,
+    longitude: data.longitude,
+    createdAt: data.createdAt.toDate(),
+    travelMode: data.travelMode,
   }
 }
 
-async function getAllLocations() {
-  const users = await getAllUsers()
-  const allLocations = users.map(async (user) => {
-    const locations = await getUserLocations(user.userId)
-    return {
-      userId: user.userId,
-      // Profile overrides win over the Google name/photo.
-      userName: user.customName || user.displayName,
-      photoURL: user.customPhoto || user.photoURL,
-      customName: user.customName ?? null,
-      customPhoto: user.customPhoto ?? null,
-      lastLogin: user.lastLogin,
-      locations,
-    }
-  })
-  return allLocations
+/**
+ * Everyone's profile and locations, kept live: `onChange` gets the full data
+ * once everything has loaded, and again whenever anyone logs, edits or
+ * deletes an entry or changes their profile (on any device). Returns a
+ * function that stops listening.
+ */
+const subscribeToAllLocations = (
+  onChange: (data: LocationData[]) => void,
+  onError: (error: Error) => void
+) => {
+  let order: string[] = [] // user ids, most recently signed in first
+  const users = new Map<string, UserEntry>()
+  const locations = new Map<string, LocationEntry[]>()
+  const stopLocations = new Map<string, () => void>()
+
+  const emit = () => {
+    // Wait until every user's locations have arrived at least once.
+    if (order.some((id) => !locations.has(id))) return
+    onChange(
+      order.map((id) => {
+        const user = users.get(id)!
+        return {
+          userId: id,
+          // Profile overrides win over the Google name/photo.
+          userName: user.customName || user.displayName,
+          photoURL: user.customPhoto || user.photoURL,
+          customName: user.customName ?? null,
+          customPhoto: user.customPhoto ?? null,
+          lastLogin: user.lastLogin,
+          locations: locations.get(id)!,
+        }
+      })
+    )
+  }
+
+  const stopUsers = onSnapshot(
+    query(collection(db, 'users'), orderBy('lastLogin', 'desc')),
+    (snapshot) => {
+      order = snapshot.docs.map((d) => d.id)
+      for (const d of snapshot.docs) users.set(d.id, toUserEntry(d))
+      // Listen to each new user's locations; stop for removed users.
+      for (const id of order) {
+        if (stopLocations.has(id)) continue
+        stopLocations.set(
+          id,
+          onSnapshot(
+            query(
+              collection(db, 'users', id, 'locations'),
+              orderBy('createdAt', 'desc')
+            ),
+            (entries) => {
+              locations.set(id, entries.docs.map(toLocationEntry))
+              emit()
+            },
+            onError
+          )
+        )
+      }
+      for (const [id, stop] of stopLocations) {
+        if (order.includes(id)) continue
+        stop()
+        stopLocations.delete(id)
+        locations.delete(id)
+        users.delete(id)
+      }
+      emit()
+    },
+    onError
+  )
+
+  return () => {
+    stopUsers()
+    stopLocations.forEach((stop) => stop())
+  }
 }
 
 type UpdateUserProfileType = {
@@ -336,7 +362,7 @@ export {
   db,
   deleteLocationFromFirestore,
   exportAllData,
-  getAllLocations,
+  subscribeToAllLocations,
   updateLocationInFirestore,
   updateUserProfile,
   writeLocationToFirestore,

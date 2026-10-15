@@ -9,12 +9,11 @@ import {
 
 import { useAuth } from '@/lib/AuthContext'
 import { toDate } from '@/lib/dates'
-import { getAllLocations, LocationEntry } from '@/lib/firebase'
+import { LocationEntry, subscribeToAllLocations } from '@/lib/firebase'
 import { LocationData } from '@/lib/types'
 
 interface LocationContextType {
   locationData: LocationData[]
-  refreshLocations: () => Promise<void>
   removeLocation: (userId: string, locationId: string) => void
   updateUserLocally: (userId: string, changes: Partial<LocationData>) => void
   updateLocation: (
@@ -40,13 +39,9 @@ const LocationContext = createContext<LocationContextType | undefined>(
   undefined
 )
 
-const fetchAllLocations = async () => Promise.all(await getAllLocations())
-
 export const LocationProvider = ({ children }: { children: ReactNode }) => {
   const { user, loading } = useAuth()
   const [locationData, setLocationData] = useState<LocationData[]>([])
-  // A manual refresh in progress.
-  const [isLoading, setIsLoading] = useState(false)
   // Whose data is loaded; until it's the signed-in user's, we're loading.
   const [loadedFor, setLoadedFor] = useState<string | null>(null)
   const [flySignal, setFlySignal] = useState(0)
@@ -58,18 +53,6 @@ export const LocationProvider = ({ children }: { children: ReactNode }) => {
   }, [])
 
   const requestFlyToMyLocation = () => setFlySignal((s) => s + 1)
-
-  const refreshLocations = async () => {
-    try {
-      setIsLoading(true)
-      setLocationData(await fetchAllLocations())
-      setNow(Date.now())
-    } catch (error) {
-      console.error('Error fetching locations:', error)
-    } finally {
-      setIsLoading(false)
-    }
-  }
 
   // Remove a single location from local state without refetching everything.
   // Used after a successful Firestore delete so the UI updates instantly.
@@ -173,27 +156,22 @@ export const LocationProvider = ({ children }: { children: ReactNode }) => {
     })
   }
 
-  // Initial load — wait until auth has resolved before reading Firestore,
-  // otherwise the request goes out unauthenticated and the security rules
-  // reject it with permission-denied.
+  // Everyone's data, kept live: loads once auth has resolved (an
+  // unauthenticated read would be rejected by the security rules), then
+  // updates whenever anyone logs, edits or deletes, on any device.
   useEffect(() => {
-    // Wait for auth; signed out there's nothing to load (and an
-    // unauthenticated read would fail).
     if (loading || !user) return
-    let cancelled = false
-    fetchAllLocations()
-      .then((data) => {
-        if (cancelled) return
+    return subscribeToAllLocations(
+      (data) => {
         setLocationData(data)
         setNow(Date.now())
-      })
-      .catch((error) => console.error('Error fetching locations:', error))
-      .finally(() => {
-        if (!cancelled) setLoadedFor(user.uid)
-      })
-    return () => {
-      cancelled = true
-    }
+        setLoadedFor(user.uid)
+      },
+      (error) => {
+        console.error('Error loading locations:', error)
+        setLoadedFor(user.uid)
+      }
+    )
   }, [user, loading])
 
   return (
@@ -201,7 +179,6 @@ export const LocationProvider = ({ children }: { children: ReactNode }) => {
       value={{
         // Signed out: nothing to show, and nothing loading.
         locationData: user ? locationData : [],
-        refreshLocations,
         removeLocation,
         updateUserLocally,
         updateLocation,
@@ -209,7 +186,7 @@ export const LocationProvider = ({ children }: { children: ReactNode }) => {
         flySignal,
         requestFlyToMyLocation,
         now,
-        isLoading: loading || (!!user && (loadedFor !== user.uid || isLoading)),
+        isLoading: loading || (!!user && loadedFor !== user.uid),
       }}
     >
       {children}

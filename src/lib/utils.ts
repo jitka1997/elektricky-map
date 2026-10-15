@@ -75,10 +75,10 @@ export const searchCities = async (
   }
   for (const tag of PLACE_TAGS) params.append('osm_tag', tag)
 
-  // Photon is a free public service that sometimes stops answering; give up
-  // after a while instead of waiting forever.
+  // Photon is a free public service; it can be slow (10+ s when busy) or stop
+  // answering. Wait a good while, but not forever.
   const response = await fetch(`${PHOTON_BASE}/api/?${params.toString()}`, {
-    signal: AbortSignal.timeout(8000),
+    signal: AbortSignal.timeout(25_000),
   })
   if (!response.ok) {
     throw new Error(`City search failed: ${response.status}`)
@@ -116,7 +116,7 @@ export const reverseGeocodeCity = async (
   })
 
   const response = await fetch(`${PHOTON_BASE}/reverse?${params.toString()}`, {
-    signal: AbortSignal.timeout(8000),
+    signal: AbortSignal.timeout(25_000),
   })
   if (!response.ok) {
     throw new Error(`Reverse geocoding failed: ${response.status}`)

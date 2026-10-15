@@ -32,7 +32,14 @@ const CitySearch: React.FC<Props> = ({ value, onSelect }) => {
   }>({ query: '', cities: [], failed: false })
   // Bumped by "Try again" to repeat a search that failed.
   const [attempt, setAttempt] = useState(0)
-  const [isLocating, setIsLocating] = useState(false)
+  // The search that has been running for a while (to say it's still going).
+  const [slowQuery, setSlowQuery] = useState<string | null>(null)
+  // "Use my current location": getting the position, then asking Photon
+  // which city it is (the slow part when Photon is busy).
+  const [locating, setLocating] = useState<
+    null | 'position' | 'city' | 'city-slow'
+  >(null)
+  const isLocating = locating !== null
   const [error, setError] = useState<string | null>(null)
   // Index of the keyboard-highlighted suggestion (-1 = none).
   const [activeIndex, setActiveIndex] = useState(-1)
@@ -53,12 +60,14 @@ const CitySearch: React.FC<Props> = ({ value, onSelect }) => {
   const suggestions = searchable && results.query === q ? results.cities : []
   const isSearching = searchable && results.query !== q
   const searchFailed = searchable && results.query === q && results.failed
+  const isSlow = isSearching && slowQuery === q
 
   // Debounced autocomplete.
   useEffect(() => {
     if (!searchable) return
     // Ignore a slow answer that arrives after the text changed again.
     let cancelled = false
+    const slowTimer = setTimeout(() => setSlowQuery(q), 4000)
     const timer = setTimeout(async () => {
       let cities: CityOption[] = []
       let failed = false
@@ -75,6 +84,7 @@ const CitySearch: React.FC<Props> = ({ value, onSelect }) => {
     return () => {
       cancelled = true
       clearTimeout(timer)
+      clearTimeout(slowTimer)
     }
   }, [q, searchable, attempt])
 
@@ -98,7 +108,8 @@ const CitySearch: React.FC<Props> = ({ value, onSelect }) => {
   // mode). After filling, the value can still be edited or cleared.
   const fillFromLocation = async () => {
     setError(null)
-    setIsLocating(true)
+    setLocating('position')
+    let slowTimer: ReturnType<typeof setTimeout> | undefined
     try {
       if (!navigator.geolocation) {
         throw new Error('Geolocation is not supported by your browser')
@@ -119,6 +130,8 @@ const CitySearch: React.FC<Props> = ({ value, onSelect }) => {
       )
 
       const { latitude, longitude } = position.coords
+      setLocating('city')
+      slowTimer = setTimeout(() => setLocating('city-slow'), 4000)
       const city = await cityOptionFromCoords(latitude, longitude)
       if (!city) {
         throw new Error('Could not determine your city')
@@ -134,7 +147,8 @@ const CitySearch: React.FC<Props> = ({ value, onSelect }) => {
             : 'An unknown error occurred'
       )
     } finally {
-      setIsLocating(false)
+      clearTimeout(slowTimer)
+      setLocating(null)
     }
   }
 
@@ -214,7 +228,11 @@ const CitySearch: React.FC<Props> = ({ value, onSelect }) => {
         disabled={isLocating}
         className="link text-base-content w-fit text-sm"
       >
-        {isLocating ? 'Finding your location...' : '📍 Use my current location'}
+        {locating === 'position'
+          ? 'Finding your location...'
+          : isLocating
+            ? 'Finding your city...'
+            : '📍 Use my current location'}
       </button>
 
       <div className="relative w-full">
@@ -282,6 +300,11 @@ const CitySearch: React.FC<Props> = ({ value, onSelect }) => {
         )}
       </div>
 
+      {(isSlow || locating === 'city-slow') && (
+        <div className="mt-1 text-sm opacity-70">
+          City search is slow right now. Still looking...
+        </div>
+      )}
       {searchFailed && (
         <div className="mt-1 text-sm">
           City search isn&apos;t answering right now. It&apos;s a free service
