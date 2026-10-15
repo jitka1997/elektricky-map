@@ -1,6 +1,7 @@
 // Sending web push notifications (server only). Each device that turned
 // notifications on is a document in `users/{id}/devices`.
 import { createHash } from 'node:crypto'
+import https from 'node:https'
 
 import webpush, { type PushSubscription } from 'web-push'
 
@@ -28,6 +29,30 @@ const configure = () => {
   configured = true
 }
 
+// Connections to the push services can take ~1 s to open on a slow network,
+// and Node's default gives each address only 250 ms before giving up
+// (ETIMEDOUT). Allow more, and reuse connections between sends.
+const agent = new https.Agent({
+  keepAlive: true,
+  autoSelectFamilyAttemptTimeout: 2000,
+})
+
+/** Sends one notification, retrying once if the network (not the push
+ * service) failed. */
+const send = async (
+  subscription: PushSubscription,
+  payload: string,
+  ttlSeconds: number
+) => {
+  const options = { TTL: ttlSeconds, agent, timeout: 10_000 }
+  try {
+    return await webpush.sendNotification(subscription, payload, options)
+  } catch (error) {
+    if ((error as { statusCode?: number }).statusCode) throw error
+    return await webpush.sendNotification(subscription, payload, options)
+  }
+}
+
 /** A stable id per device, so subscribing again replaces the old entry. */
 export const deviceId = (endpoint: string) =>
   createHash('sha256').update(endpoint).digest('hex').slice(0, 32)
@@ -49,17 +74,21 @@ export const sendToUsers = async (
       await Promise.all(
         devices.docs.map(async (device) => {
           try {
-            await webpush.sendNotification(
+            await send(
               device.get('subscription') as PushSubscription,
               JSON.stringify(message),
-              { TTL: ttlSeconds }
+              ttlSeconds
             )
             sent++
           } catch (error) {
             const status = (error as { statusCode?: number }).statusCode
             // The device turned notifications off or the app was removed.
             if (status === 404 || status === 410) await device.ref.delete()
-            else console.error('Push failed with status', status)
+            else
+              console.error(
+                'Push failed:',
+                status ?? (error as { code?: string }).code
+              )
           }
         })
       )

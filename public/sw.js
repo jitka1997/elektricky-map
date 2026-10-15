@@ -108,6 +108,9 @@ self.addEventListener('push', (event) => {
     self.registration.showNotification(message.title || 'Električky', {
       body: message.body,
       icon: '/icons/icon-192.png',
+      // Android's status bar: a one-colour tram silhouette (Android paints it
+      // white; a full-colour icon would show as a blank square).
+      badge: '/icons/badge-96.png',
       tag: message.tag,
       data: { url: message.url || '/' },
       // Android only; iPhones always use the default sound and vibration.

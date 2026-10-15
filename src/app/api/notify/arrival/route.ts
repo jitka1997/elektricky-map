@@ -30,8 +30,9 @@ const validTimeZone = (tz: unknown) => {
 
 /**
  * Called by the app right after someone logs a new entry. Tells everyone
- * whose latest location is that city: "Ani just arrived in Brno" for an entry
- * logged for about now, or "Ani is coming to Brno on 3 Nov" for a planned one.
+ * whose latest location is that city: "Ani just rolled into Brno" for an entry
+ * logged for about now, or "Next stop: Brno! Ani is on the way" for a planned
+ * one.
  * Entries logged for the past don't notify anyone. Each entry notifies once.
  */
 async function notifyArrival(request: Request) {
@@ -101,8 +102,8 @@ async function notifyArrival(request: Request) {
       ? await sendToUsers(
           recipients,
           {
-            title: `🚊 ${name} just arrived in ${city}!`,
-            body: "You're in the same city. Time to meet up?",
+            title: `Crrrrn! ${name} just rolled into ${city}`,
+            body: 'Two Električky on the same tracks. Time to meet up?',
             url: '/',
             tag: `arrival-${userId}`,
           },
@@ -111,13 +112,13 @@ async function notifyArrival(request: Request) {
       : await sendToUsers(
           recipients,
           {
-            title: `🚊 ${name} is coming to ${city}`,
+            title: `Next stop: ${city}! ${name} is on the way`,
             body: `Arriving ${new Date(time).toLocaleDateString('en-GB', {
               weekday: 'short',
               day: 'numeric',
               month: 'short',
               timeZone: validTimeZone(timeZone),
-            })}.`,
+            })}. Keep a seat free!`,
             url: '/',
             tag: `planned-${userId}-${locationId}`,
           },

@@ -9,8 +9,8 @@ async function sendTest(request: Request) {
   const sent = await sendToUsers(
     [userId],
     {
-      title: '🚊 Notifications are on',
-      body: "This is how you'll hear when a friend arrives in your city.",
+      title: 'Crrrrn! It works!',
+      body: "This is how you'll know another Električka has rolled into town.",
       url: '/profile',
       tag: 'test',
     },
