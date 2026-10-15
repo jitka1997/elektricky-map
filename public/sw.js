@@ -94,3 +94,48 @@ self.addEventListener('fetch', (event) => {
     })()
   )
 })
+
+// Push notifications, sent by the API routes in src/app/api (see
+// src/lib/server/push.ts for the message format).
+self.addEventListener('push', (event) => {
+  let message = {}
+  try {
+    message = event.data ? event.data.json() : {}
+  } catch {
+    message = { body: event.data?.text() }
+  }
+  event.waitUntil(
+    self.registration.showNotification(message.title || 'Električky', {
+      body: message.body,
+      icon: '/icons/icon-192.png',
+      tag: message.tag,
+      data: { url: message.url || '/' },
+      // Android only; iPhones always use the default sound and vibration.
+      vibrate: [80, 60, 80, 60, 200],
+    })
+  )
+})
+
+// Tapping a notification opens the app (or brings it to the front) on the
+// page the notification points to.
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close()
+  const url = new URL(event.notification.data?.url || '/', self.location.origin)
+    .href
+  event.waitUntil(
+    (async () => {
+      const windows = await self.clients.matchAll({
+        type: 'window',
+        includeUncontrolled: true,
+      })
+      const open = windows.find((w) => 'focus' in w)
+      if (open) {
+        await open.focus()
+        if (open.url !== url && 'navigate' in open)
+          await open.navigate(url).catch(() => {})
+        return
+      }
+      await self.clients.openWindow(url)
+    })()
+  )
+})

@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
 
 import Container from '@/components/Container'
+import NotificationSettings from '@/components/NotificationSettings'
 import { useAuth } from '@/lib/AuthContext'
 import { toDateTimeLocal } from '@/lib/dates'
 import { saveJsonFile } from '@/lib/download'
@@ -208,6 +209,8 @@ const ProfilePage = () => {
             </div>
           </div>
         </section>
+
+        <NotificationSettings />
 
         <section className="card bg-base-200 shadow-md">
           <div className="card-body gap-3">

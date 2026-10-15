@@ -19,6 +19,7 @@ import {
 import { useLocations } from '@/lib/LocationContext'
 import { isFuture, neighborsAt, sameCity } from '@/lib/locations'
 import { shortName } from '@/lib/names'
+import { notifyNewEntry } from '@/lib/push'
 import { DEFAULT_TRAVEL_MODE, TravelMode } from '@/lib/travel'
 import { CityOption } from '@/lib/utils'
 
@@ -137,6 +138,8 @@ const HistoryView = () => {
         userId: user.uid,
         locationData: { ...base, createdAt: when },
       })
+      // Friends in that city hear about it if it's for now or planned.
+      notifyNewEntry(id)
       addLocation(
         user.uid,
         { ...base, id, createdAt: when },

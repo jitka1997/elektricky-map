@@ -10,7 +10,9 @@ import { useAuth } from '@/lib/AuthContext'
 import { toDateTimeLocal } from '@/lib/dates'
 import { writeLocationToFirestore } from '@/lib/firebase'
 import { useLocations } from '@/lib/LocationContext'
-import { neighborsAt, sameCity } from '@/lib/locations'
+import { neighborsAt, pastLocations, sameCity } from '@/lib/locations'
+import { shortName } from '@/lib/names'
+import { notifyNewEntry } from '@/lib/push'
 import { DEFAULT_TRAVEL_MODE, TravelMode } from '@/lib/travel'
 import { CityOption } from '@/lib/utils'
 
@@ -22,6 +24,8 @@ const LocationSelect: React.FC = () => {
   const [dateTime, setDateTime] = useState('')
   const [isUploading, setIsUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // After logging: which friends are already in that city.
+  const [meetMessage, setMeetMessage] = useState<string | null>(null)
   // Bumped after a successful submit to remount CitySearch and clear its input.
   const [resetKey, setResetKey] = useState(0)
   const { user } = useAuth()
@@ -40,6 +44,25 @@ const LocationSelect: React.FC = () => {
     return sameCity(selectedCity, newer) || sameCity(selectedCity, older)
   })()
 
+  // "Bára is in Vienna too!" when friends' latest entry is that city.
+  const friendsThereMessage = (city: CityOption, when: Date | null) => {
+    const now = Date.now()
+    const names = locationData
+      .filter((u) => u.userId !== user?.uid)
+      .filter((u) => sameCity(city, pastLocations(u.locations ?? [], now)[0]))
+      .map((u) => shortName(u.userName, u.customName) || 'A friend')
+    if (!names.length) return null
+    const who =
+      names.length === 1
+        ? names[0]
+        : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`
+    const verb = names.length === 1 ? 'is' : 'are'
+    if (when && when.getTime() > now + 10 * 60 * 1000)
+      return `${who} ${verb} in ${city.city} right now.`
+    if (when && when.getTime() < now - 3 * 60 * 60 * 1000) return null
+    return `🎉 ${who} ${verb} in ${city.city} too!`
+  }
+
   const startCustomTime = () => {
     setDateTime(toDateTimeLocal(new Date()))
     setCustomTime(true)
@@ -47,6 +70,7 @@ const LocationSelect: React.FC = () => {
 
   const submitLocationToFirestore = async () => {
     setError(null)
+    setMeetMessage(null)
     try {
       setIsUploading(true)
       if (!user) throw new Error('User not authenticated')
@@ -72,6 +96,10 @@ const LocationSelect: React.FC = () => {
           createdAt: when ?? (serverTimestamp() as unknown as Timestamp),
         },
       })
+
+      // Friends in that city get a notification (for now or planned entries).
+      notifyNewEntry(id)
+      setMeetMessage(friendsThereMessage(selectedCity, when))
 
       // Optimistically add to local state so the pin/entry appears instantly
       // without refetching everything. Use a local Date for display.
@@ -159,6 +187,22 @@ const LocationSelect: React.FC = () => {
         )}
       </Container>
       {error && <div className="text-sm text-red-500">{error}</div>}
+      {meetMessage && (
+        <div
+          role="status"
+          className="bg-base-200 rounded-box flex items-center justify-between gap-3 px-4 py-3 font-semibold"
+        >
+          <span>{meetMessage}</span>
+          <button
+            type="button"
+            onClick={() => setMeetMessage(null)}
+            className="btn btn-ghost btn-xs"
+            aria-label="Dismiss"
+          >
+            ✕
+          </button>
+        </div>
+      )}
     </>
   )
 }
