@@ -31,6 +31,7 @@ const HistoryView = () => {
     removeLocation,
     updateLocation,
     addLocation,
+    now,
   } = useLocations()
   const router = useRouter()
 
@@ -173,8 +174,6 @@ const HistoryView = () => {
 
   const myLocations =
     locationData.find((u) => u.userId === user.uid)?.locations ?? []
-  // Reference time for marking entries logged in the future as "upcoming".
-  const now = Date.now()
 
   // Edit: the time only counts as changed if the picker value differs from the
   // original (minute precision), so an untouched time keeps its exact seconds.

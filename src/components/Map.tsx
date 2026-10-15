@@ -4,7 +4,7 @@ import 'leaflet/dist/leaflet.css'
 
 import L from 'leaflet'
 import { useSearchParams } from 'next/navigation'
-import { useEffect, useReducer, useRef, useState } from 'react'
+import { useEffect, useEffectEvent, useReducer, useRef, useState } from 'react'
 import { MapContainer, Marker, Popup, TileLayer, useMap } from 'react-leaflet'
 
 import RecordOverlay from '@/components/RecordOverlay'
@@ -47,14 +47,14 @@ const createUserIcon = (photoURL: string | null) => {
 const LocationMarker = () => {
   const map = useMap()
   const { user } = useAuth()
-  const { locationData, flySignal } = useLocations()
+  const { locationData, flySignal, now } = useLocations()
   const didMount = useRef(false)
 
   // The current user's most recent location up to now (newest-first; future /
   // planned entries are skipped), or undefined if they have none.
   const myLocation = pastLocations(
     locationData.find((u) => u.userId === user?.uid)?.locations ?? [],
-    Date.now()
+    now
   )[0]
 
   // Fly to the user's pin whenever flySignal is bumped (e.g. after logging a
@@ -107,7 +107,7 @@ const SPREAD_RADIUS_PX = 8
 const UserMarkers = ({ hiddenUserId }: { hiddenUserId: string | null }) => {
   const map = useMap()
   const { user } = useAuth()
-  const { locationData } = useLocations()
+  const { locationData, now } = useLocations()
   // Re-render on zoom so the pixel-based spread stays correct at every zoom.
   const [, forceRerender] = useReducer((n: number) => n + 1, 0)
 
@@ -121,7 +121,6 @@ const UserMarkers = ({ hiddenUserId }: { hiddenUserId: string | null }) => {
   // One marker per user: their most recent location up to now (future entries
   // aren't shown). The user whose journey is currently playing is hidden so
   // only their animated marker shows.
-  const now = Date.now()
   const base: BaseMarker[] = []
   for (const u of locationData) {
     if (u.userId === hiddenUserId) continue
@@ -287,13 +286,12 @@ const Journey = ({
 }) => {
   const map = useMap()
   const { user } = useAuth()
-  const { locationData } = useLocations()
+  const { locationData, now } = useLocations()
   const [selectedUserId, setSelectedUserId] = useState('')
   const [playing, setPlaying] = useState(false)
 
   // A journey needs at least two stops to draw a path.
   // Future (planned) entries are left out of the journey.
-  const now = Date.now()
   const journeyUsers = locationData.filter(
     (u) => pastLocations(u.locations ?? [], now).length >= 2
   )
@@ -314,12 +312,13 @@ const Journey = ({
       }))
     : []
 
-  const stopsRef = useRef(stops)
-  stopsRef.current = stops
+  // The playback effect reads the latest stops without restarting when they
+  // change (only `playing` starts and stops it).
+  const getStops = useEffectEvent(() => stops)
 
   useEffect(() => {
     if (!playing) return
-    const path = stopsRef.current
+    const path = getStops()
     if (path.length < 2) return
 
     const legs = path.slice(0, -1).map((s, i) => {

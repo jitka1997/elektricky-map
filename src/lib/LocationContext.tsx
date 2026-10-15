@@ -30,6 +30,9 @@ interface LocationContextType {
   // A counter bumped to request the map fly to the current user's pin.
   flySignal: number
   requestFlyToMyLocation: () => void
+  // The current time (ms), shared by everything that splits entries into
+  // past and planned. Ticks every minute and whenever entries change.
+  now: number
   isLoading: boolean
 }
 
@@ -37,20 +40,30 @@ const LocationContext = createContext<LocationContextType | undefined>(
   undefined
 )
 
+const fetchAllLocations = async () => Promise.all(await getAllLocations())
+
 export const LocationProvider = ({ children }: { children: ReactNode }) => {
   const { user, loading } = useAuth()
   const [locationData, setLocationData] = useState<LocationData[]>([])
-  const [isLoading, setIsLoading] = useState(true)
+  // A manual refresh in progress.
+  const [isLoading, setIsLoading] = useState(false)
+  // Whose data is loaded; until it's the signed-in user's, we're loading.
+  const [loadedFor, setLoadedFor] = useState<string | null>(null)
   const [flySignal, setFlySignal] = useState(0)
+  const [now, setNow] = useState(() => Date.now())
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 60_000)
+    return () => clearInterval(timer)
+  }, [])
 
   const requestFlyToMyLocation = () => setFlySignal((s) => s + 1)
 
   const refreshLocations = async () => {
     try {
       setIsLoading(true)
-      const locationsPromises = await getAllLocations()
-      const resolvedLocations = await Promise.all(locationsPromises)
-      setLocationData(resolvedLocations)
+      setLocationData(await fetchAllLocations())
+      setNow(Date.now())
     } catch (error) {
       console.error('Error fetching locations:', error)
     } finally {
@@ -61,6 +74,7 @@ export const LocationProvider = ({ children }: { children: ReactNode }) => {
   // Remove a single location from local state without refetching everything.
   // Used after a successful Firestore delete so the UI updates instantly.
   const removeLocation = (userId: string, locationId: string) => {
+    setNow(Date.now())
     setLocationData((prev) =>
       prev.map((u) =>
         u.userId === userId
@@ -78,6 +92,7 @@ export const LocationProvider = ({ children }: { children: ReactNode }) => {
     userId: string,
     changes: Partial<LocationData>
   ) => {
+    setNow(Date.now())
     setLocationData((prev) =>
       prev.some((u) => u.userId === userId)
         ? prev.map((u) => (u.userId === userId ? { ...u, ...changes } : u))
@@ -101,6 +116,7 @@ export const LocationProvider = ({ children }: { children: ReactNode }) => {
     locationId: string,
     changes: Partial<LocationEntry>
   ) => {
+    setNow(Date.now())
     setLocationData((prev) =>
       prev.map((u) =>
         u.userId === userId
@@ -128,6 +144,7 @@ export const LocationProvider = ({ children }: { children: ReactNode }) => {
     location: LocationEntry,
     userMeta?: { userName: string | null; photoURL: string | null }
   ) => {
+    setNow(Date.now())
     // Sort newest-first so a manually-added past entry lands in the right slot.
     const toMillis = (d: LocationEntry['createdAt']) =>
       d instanceof Date ? d.getTime() : d.toMillis()
@@ -160,20 +177,30 @@ export const LocationProvider = ({ children }: { children: ReactNode }) => {
   // otherwise the request goes out unauthenticated and the security rules
   // reject it with permission-denied.
   useEffect(() => {
-    if (loading) return // auth state not yet known
-    if (!user) {
-      // Signed out: nothing to load, and an unauthenticated read would fail.
-      setLocationData([])
-      setIsLoading(false)
-      return
+    // Wait for auth; signed out there's nothing to load (and an
+    // unauthenticated read would fail).
+    if (loading || !user) return
+    let cancelled = false
+    fetchAllLocations()
+      .then((data) => {
+        if (cancelled) return
+        setLocationData(data)
+        setNow(Date.now())
+      })
+      .catch((error) => console.error('Error fetching locations:', error))
+      .finally(() => {
+        if (!cancelled) setLoadedFor(user.uid)
+      })
+    return () => {
+      cancelled = true
     }
-    refreshLocations()
   }, [user, loading])
 
   return (
     <LocationContext.Provider
       value={{
-        locationData,
+        // Signed out: nothing to show, and nothing loading.
+        locationData: user ? locationData : [],
         refreshLocations,
         removeLocation,
         updateUserLocally,
@@ -181,7 +208,8 @@ export const LocationProvider = ({ children }: { children: ReactNode }) => {
         addLocation,
         flySignal,
         requestFlyToMyLocation,
-        isLoading,
+        now,
+        isLoading: loading || (!!user && (loadedFor !== user.uid || isLoading)),
       }}
     >
       {children}

@@ -23,8 +23,15 @@ const GEO_ERROR_MESSAGES: Record<number, string> = {
 
 const CitySearch: React.FC<Props> = ({ value, onSelect }) => {
   const [query, setQuery] = useState<string>(value ? formatCity(value) : '')
-  const [suggestions, setSuggestions] = useState<CityOption[]>([])
-  const [isSearching, setIsSearching] = useState(false)
+  // Search results and the text they were found for. They only show while
+  // that's still what's typed, so nothing needs resetting when it changes.
+  const [results, setResults] = useState<{
+    query: string
+    cities: CityOption[]
+    failed: boolean
+  }>({ query: '', cities: [], failed: false })
+  // Bumped by "Try again" to repeat a search that failed.
+  const [attempt, setAttempt] = useState(0)
   const [isLocating, setIsLocating] = useState(false)
   const [error, setError] = useState<string | null>(null)
   // Index of the keyboard-highlighted suggestion (-1 = none).
@@ -40,36 +47,45 @@ const CitySearch: React.FC<Props> = ({ value, onSelect }) => {
     valueRef.current = value
   }, [value])
 
-  // Debounced autocomplete. Skips when the box already shows the selected city.
-  useEffect(() => {
-    const q = query.trim()
-    // Nothing to search for, or the box already shows the selected city.
-    if (q.length < 2 || (value && q === formatCity(value))) {
-      setSuggestions([])
-      setActiveIndex(-1)
-      setIsSearching(false)
-      return
-    }
+  // Nothing to search for, or the box already shows the selected city.
+  const q = query.trim()
+  const searchable = q.length >= 2 && !(value && q === formatCity(value))
+  const suggestions = searchable && results.query === q ? results.cities : []
+  const isSearching = searchable && results.query !== q
+  const searchFailed = searchable && results.query === q && results.failed
 
-    setIsSearching(true)
+  // Debounced autocomplete.
+  useEffect(() => {
+    if (!searchable) return
+    // Ignore a slow answer that arrives after the text changed again.
+    let cancelled = false
     const timer = setTimeout(async () => {
+      let cities: CityOption[] = []
+      let failed = false
       try {
-        setSuggestions(await searchCities(q, { limit: 6 }))
-        setActiveIndex(-1)
+        cities = await searchCities(q, { limit: 6 })
       } catch {
-        setSuggestions([])
-        setActiveIndex(-1)
-      } finally {
-        setIsSearching(false)
+        failed = true
       }
+      if (cancelled) return
+      setResults({ query: q, cities, failed })
+      setActiveIndex(-1)
     }, 300)
 
-    return () => clearTimeout(timer)
-  }, [query, value])
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+    }
+  }, [q, searchable, attempt])
 
   const closeSuggestions = () => {
-    setSuggestions([])
+    setResults({ query: q, cities: [], failed: false })
     setActiveIndex(-1)
+  }
+
+  const retrySearch = () => {
+    setResults({ query: '', cities: [], failed: false })
+    setAttempt((n) => n + 1)
   }
 
   const pickSuggestion = (city: CityOption) => {
@@ -110,7 +126,13 @@ const CitySearch: React.FC<Props> = ({ value, onSelect }) => {
 
       pickSuggestion(city)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An unknown error occurred')
+      setError(
+        err instanceof Error && err.name === 'TimeoutError'
+          ? "City lookup isn't answering right now. Please try again in a moment."
+          : err instanceof Error
+            ? err.message
+            : 'An unknown error occurred'
+      )
     } finally {
       setIsLocating(false)
     }
@@ -197,7 +219,13 @@ const CitySearch: React.FC<Props> = ({ value, onSelect }) => {
 
       <div className="relative w-full">
         <input
-          type="text"
+          // "search" + autocomplete off: stops Chrome offering saved
+          // addresses for a field it guesses is an address ("city").
+          type="search"
+          name="elektricky-city-search"
+          autoComplete="off"
+          autoCorrect="off"
+          spellCheck={false}
           value={query}
           onChange={handleInputChange}
           onFocus={(e) => e.target.select()}
@@ -254,6 +282,15 @@ const CitySearch: React.FC<Props> = ({ value, onSelect }) => {
         )}
       </div>
 
+      {searchFailed && (
+        <div className="mt-1 text-sm">
+          City search isn&apos;t answering right now. It&apos;s a free service
+          that&apos;s sometimes down.{' '}
+          <button type="button" onClick={retrySearch} className="link">
+            Try again
+          </button>
+        </div>
+      )}
       {error && <div className="text-sm text-red-500">{error}</div>}
     </div>
   )

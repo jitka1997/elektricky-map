@@ -29,10 +29,11 @@ const LocationSelect: React.FC = () => {
   // Bumped after a successful submit to remount CitySearch and clear its input.
   const [resetKey, setResetKey] = useState(0)
   const { user } = useAuth()
-  const { addLocation, locationData, requestFlyToMyLocation } = useLocations()
+  const { addLocation, locationData, requestFlyToMyLocation, now } =
+    useLocations()
 
   // The time this entry would be logged at (now, unless changed).
-  const logTime = customTime ? new Date(dateTime).getTime() : Date.now()
+  const logTime = customTime ? new Date(dateTime).getTime() : now
 
   // Block a consecutive duplicate: the picked city matches the entry right
   // before or after the log time.
