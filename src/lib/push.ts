@@ -26,6 +26,9 @@ const callApi = async (path: string, method: string, body: unknown) => {
   return response.json()
 }
 
+// Where this device is, so reminders arrive in its evening.
+const deviceTimeZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone
+
 export type PushStatus =
   | 'unsupported' // this browser can't do push
   | 'needs-install' // iPhone/iPad: only works from the home-screen app
@@ -104,6 +107,7 @@ export const enablePush = async (): Promise<PushStatus> => {
   try {
     await callApi('/api/push/devices', 'POST', {
       subscription: subscription.toJSON(),
+      timeZone: deviceTimeZone(),
     })
   } catch (error) {
     // Not saved on the server, so undo it here too: otherwise this device
@@ -125,6 +129,7 @@ export const resyncPush = async () => {
   if (!subscription) return
   await callApi('/api/push/devices', 'POST', {
     subscription: subscription.toJSON(),
+    timeZone: deviceTimeZone(),
   })
 }
 
@@ -151,6 +156,13 @@ export const sendTestPush = async (): Promise<number> =>
 export const notifyNewEntry = (locationId: string) => {
   callApi('/api/notify/arrival', 'POST', {
     locationId,
-    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    timeZone: deviceTimeZone(),
   }).catch((error) => console.error('Arrival notification failed:', error))
 }
+
+/** The "Remind me to check in" setting (days; 0 = off). */
+export const saveReminderDays = (reminderDays: number) =>
+  callApi('/api/reminders', 'POST', { reminderDays })
+
+/** "Yes, still here": restarts the reminder clock. */
+export const checkIn = () => callApi('/api/reminders/checkin', 'POST', {})

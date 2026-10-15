@@ -2,8 +2,9 @@
 
 import dynamic from 'next/dynamic'
 import { useRouter } from 'next/navigation'
-import { useEffect } from 'react'
+import { Suspense, useEffect } from 'react'
 
+import CheckInPrompt from '@/components/CheckInPrompt'
 import { LocationSelect } from '@/components/CitySelect'
 import Container from '@/components/Container'
 import { useAuth } from '@/lib/AuthContext'
@@ -46,6 +47,10 @@ const Home = () => {
           <MapWithNoSSR />
           <LocationSelect />
         </Container>
+        {/* Reading the URL needs a Suspense boundary for the build. */}
+        <Suspense>
+          <CheckInPrompt />
+        </Suspense>
       </div>
     </main>
   )

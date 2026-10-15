@@ -77,6 +77,7 @@ type UserEntry = {
   // Google displayName/photoURL, which are refreshed on every sign-in.
   customName?: string | null
   customPhoto?: string | null
+  reminderDays?: number | null
 }
 
 export type LocationEntry = {
@@ -195,6 +196,7 @@ const toUserEntry = (snap: QueryDocumentSnapshot): UserEntry => {
     lastLogin: data.lastLogin,
     customName: data.customName ?? null,
     customPhoto: data.customPhoto ?? null,
+    reminderDays: data.reminderDays ?? null,
   }
 }
 
@@ -241,6 +243,7 @@ const subscribeToAllLocations = (
           photoURL: user.customPhoto || user.photoURL,
           customName: user.customName ?? null,
           customPhoto: user.customPhoto ?? null,
+          reminderDays: user.reminderDays ?? null,
           lastLogin: user.lastLogin,
           locations: locations.get(id)!,
         }

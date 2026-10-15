@@ -9,6 +9,8 @@ export interface LocationData {
   // Raw profile overrides (userName/photoURL above already include them).
   customName?: string | null
   customPhoto?: string | null
+  // "Remind me to check in" (days; 0 = off; missing = the default).
+  reminderDays?: number | null
   lastLogin: Timestamp | null
   locations: LocationEntry[]
 }

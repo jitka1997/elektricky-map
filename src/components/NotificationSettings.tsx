@@ -2,14 +2,18 @@
 
 import { useEffect, useState } from 'react'
 
+import { useAuth } from '@/lib/AuthContext'
+import { useLocations } from '@/lib/LocationContext'
 import {
   disablePush,
   enablePush,
   getPushStatus,
   type PushStatus,
   resyncPush,
+  saveReminderDays,
   sendTestPush,
 } from '@/lib/push'
+import { DEFAULT_REMINDER_DAYS, REMINDER_OPTIONS } from '@/lib/reminders'
 
 // Notifications are per device: this section turns them on or off for the
 // phone or computer you're using right now.
@@ -18,6 +22,30 @@ const NotificationSettings = () => {
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+
+  // "Remind me to check in" is per person (all their devices), saved on the
+  // server; the live data shows the saved value.
+  const { user } = useAuth()
+  const { locationData } = useLocations()
+  const savedReminderDays =
+    locationData.find((u) => u.userId === user?.uid)?.reminderDays ??
+    DEFAULT_REMINDER_DAYS
+  const [reminderDays, setReminderDays] = useState<number | null>(null)
+  const shownReminderDays = reminderDays ?? savedReminderDays
+  const [reminderError, setReminderError] = useState<string | null>(null)
+
+  const changeReminderDays = async (days: number) => {
+    setReminderDays(days)
+    setReminderError(null)
+    try {
+      await saveReminderDays(days)
+    } catch (e) {
+      setReminderDays(null)
+      setReminderError(
+        `Couldn't save: ${e instanceof Error ? e.message : String(e)}`
+      )
+    }
+  }
 
   useEffect(() => {
     getPushStatus()
@@ -102,6 +130,29 @@ const NotificationSettings = () => {
         )}
         {status === 'on' && (
           <p className="text-sm font-semibold">On for this device.</p>
+        )}
+
+        <label className="flex flex-wrap items-center gap-2 text-sm">
+          <span className="font-semibold">Remind me to check in</span>
+          <select
+            className="select select-sm w-auto"
+            value={shownReminderDays}
+            onChange={(e) => changeReminderDays(Number(e.target.value))}
+          >
+            {REMINDER_OPTIONS.map(([days, label]) => (
+              <option key={days} value={days}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <p className="-mt-1 text-xs opacity-70">
+          &ldquo;Still in Brno?&rdquo; around 6 pm your time, only if you
+          haven&apos;t logged anything in that time. Goes to every device where
+          notifications are on.
+        </p>
+        {reminderError && (
+          <p className="text-sm text-red-500">{reminderError}</p>
         )}
 
         {message && <p className="text-sm">{message}</p>}
