@@ -256,7 +256,7 @@ const Timeline = ({
   const pos = (t: number) => ((Math.max(t, from) - from) / span) * 100
 
   const row = (p: StatsPerson) => {
-    const home = homeOf(p.stays)
+    const home = homeOf(p.stays, periodFrom, now)
     return p.stays
       .filter((s) => s.end > from)
       .map((s) => (

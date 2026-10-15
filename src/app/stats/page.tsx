@@ -144,7 +144,9 @@ const StatsView = () => {
             time, even if they didn&apos;t meet.
           </li>
           <li>
-            Home is the city where someone has spent the most time overall.
+            Home is the city where someone spent the most time in the period
+            you&apos;re looking at, so a move shows up from the year it
+            happened.
           </li>
           <li>
             Distances are the shortest way between two cities over the

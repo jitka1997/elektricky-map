@@ -104,10 +104,18 @@ export type PlaceTotal = { place: Place; value: number }
 const sortedTotals = (map: Map<string, PlaceTotal>) =>
   [...map.values()].sort((a, b) => b.value - a.value)
 
-/** The place where the most time was spent overall. */
-export const homeOf = (stays: Stay[]): Place | undefined => {
+/**
+ * Home: the place where the most time was spent within [from, to]. Measured
+ * per period rather than overall, so someone who moved gets their new city
+ * as home for the year they've mostly lived there.
+ */
+export const homeOf = (
+  stays: Stay[],
+  from = -Infinity,
+  to = Infinity
+): Place | undefined => {
   const time = new Map<string, PlaceTotal>()
-  for (const s of stays) addTo(time, s.place, s.end - s.start)
+  for (const s of clip(stays, from, to)) addTo(time, s.place, s.end - s.start)
   return sortedTotals(time)[0]?.place
 }
 
@@ -120,7 +128,7 @@ export const personStats = (
   from: number,
   to: number
 ) => {
-  const home = homeOf(stays)
+  const home = homeOf(stays, from, to)
   const inPeriod = clip(stays, from, to)
 
   const time = new Map<string, PlaceTotal>()
