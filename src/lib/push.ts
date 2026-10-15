@@ -72,6 +72,25 @@ const applicationServerKey = () => {
   return Uint8Array.from(atob(base64), (c) => c.charCodeAt(0))
 }
 
+// Remembers (on this device) that the user turned notifications off on
+// purpose, so the app doesn't keep inviting them back.
+const TURNED_OFF_KEY = 'notificationsTurnedOff'
+const setTurnedOff = (off: boolean) => {
+  try {
+    if (off) localStorage.setItem(TURNED_OFF_KEY, 'true')
+    else localStorage.removeItem(TURNED_OFF_KEY)
+  } catch {
+    // Private mode etc.: not remembered.
+  }
+}
+export const turnedOffOnPurpose = () => {
+  try {
+    return localStorage.getItem(TURNED_OFF_KEY) === 'true'
+  } catch {
+    return false
+  }
+}
+
 /** Asks for permission and registers this device. Returns the new status. */
 export const enablePush = async (): Promise<PushStatus> => {
   const permission = await Notification.requestPermission()
@@ -92,6 +111,7 @@ export const enablePush = async (): Promise<PushStatus> => {
     await subscription.unsubscribe().catch(() => {})
     throw error
   }
+  setTurnedOff(false)
   return 'on'
 }
 
@@ -110,6 +130,7 @@ export const resyncPush = async () => {
 
 /** Stops notifications on this device. */
 export const disablePush = async () => {
+  setTurnedOff(true)
   const subscription = await currentSubscription()
   if (!subscription) return
   await callApi('/api/push/devices', 'DELETE', {

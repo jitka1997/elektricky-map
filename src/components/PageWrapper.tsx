@@ -4,6 +4,7 @@ import React, { ReactNode } from 'react'
 
 import Container from '@/components/Container'
 import NavBar from '@/components/NavBar'
+import NotificationPrompt from '@/components/NotificationPrompt'
 import { useAuth } from '@/lib/AuthContext'
 
 const PageWrapper = ({ children }: { children: ReactNode }) => {
@@ -55,6 +56,8 @@ const PageWrapper = ({ children }: { children: ReactNode }) => {
       <main className={`relative z-0 ${!isLoginPage ? 'mt-[60px]' : ''} grow`}>
         <div className="flex flex-col gap-8 py-8">{children}</div>
       </main>
+      {/* Signed-in users only: it needs to know who to save the device for. */}
+      {user && !isLoginPage && <NotificationPrompt />}
       <footer>
         <Container className="py-4 text-center">
           <p className="flex flex-col justify-center text-sm text-gray-500">
