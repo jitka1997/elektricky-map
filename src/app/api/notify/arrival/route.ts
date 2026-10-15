@@ -94,7 +94,8 @@ async function notifyArrival(request: Request) {
   if (!recipients.length) return Response.json({ sent: 0 })
 
   const me = users.docs.find((u) => u.id === userId)?.data() ?? {}
-  const name = shortName(me.displayName ?? null, me.customName) || 'A friend'
+  const name =
+    shortName(me.displayName ?? null, me.customName) || 'An Električka'
   const city = String(loc.city).trim()
 
   const sent =

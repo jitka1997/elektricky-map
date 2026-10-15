@@ -57,7 +57,7 @@ const LocationSelect: React.FC = () => {
     const names = locationData
       .filter((u) => u.userId !== user?.uid)
       .filter((u) => sameCity(city, pastLocations(u.locations ?? [], now)[0]))
-      .map((u) => shortName(u.userName, u.customName) || 'A friend')
+      .map((u) => shortName(u.userName, u.customName) || 'An Električka')
     if (!names.length) return null
     const who =
       names.length === 1

@@ -92,24 +92,35 @@ const NotificationSettings = () => {
       )
     })
 
+  const badge = {
+    on: ['badge-success', 'On'],
+    off: ['', 'Off'],
+    denied: ['badge-error', 'Blocked'],
+  }[status as 'on' | 'off' | 'denied']
+
   return (
     <section className="card bg-base-200 shadow-md">
-      <div className="card-body gap-3">
-        <h2 className="card-title">Notifications</h2>
-        <p className="text-sm opacity-80">
-          Get a notification when a friend arrives in your city or plans to
-          come. They&apos;re set per device, so turn them on on each phone or
-          computer you use.
-        </p>
+      <div className="card-body gap-4">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="card-title">Notifications</h2>
+            <p className="text-sm opacity-80">
+              Know when another Električka rolls into your city.
+            </p>
+          </div>
+          {status === 'loading' ? (
+            <span className="loading loading-spinner loading-sm" />
+          ) : (
+            badge && (
+              <span className={`badge shrink-0 ${badge[0]}`}>{badge[1]}</span>
+            )
+          )}
+        </div>
 
-        {status === 'loading' && (
-          <span className="loading loading-spinner loading-sm" />
-        )}
         {status === 'needs-install' && (
           <p className="text-sm">
-            On iPhone, notifications only work in the app on your Home Screen.
-            Tap <b>Share → Add to Home Screen</b>, then open Električky from
-            there and come back here.
+            On iPhone they only work in the app on your Home Screen:{' '}
+            <b>Share → Add to Home Screen</b>, then open it from there.
           </p>
         )}
         {status === 'unsupported' && (
@@ -117,80 +128,88 @@ const NotificationSettings = () => {
         )}
         {status === 'dev' && (
           <p className="text-sm">
-            Notifications need the service worker, which only runs in the
-            production build (<code>npm run build && npm start</code>).
+            Only in the production build (
+            <code>npm run build && npm start</code>).
           </p>
         )}
         {status === 'denied' && (
           <p className="text-sm">
-            Notifications are blocked for Električky. Allow them in your
+            Blocked on this device. Allow notifications for Električky in your
             phone&apos;s settings (or the browser&apos;s site settings), then
             reload this page.
           </p>
         )}
-        {status === 'on' && (
-          <p className="text-sm font-semibold">On for this device.</p>
+
+        {status === 'off' && (
+          <div className="flex flex-col items-start gap-2">
+            <button
+              type="button"
+              onClick={turnOn}
+              disabled={busy}
+              className="btn btn-neutral"
+            >
+              {busy ? 'Turning on...' : 'Turn on notifications'}
+            </button>
+            <p className="text-xs opacity-70">
+              Turn them on on every phone or computer you use.
+            </p>
+          </div>
         )}
 
-        <label className="flex flex-wrap items-center gap-2 text-sm">
-          <span className="font-semibold">Remind me to check in</span>
-          <select
-            className="select select-sm w-auto"
-            value={shownReminderDays}
-            onChange={(e) => changeReminderDays(Number(e.target.value))}
-          >
-            {REMINDER_OPTIONS.map(([days, label]) => (
-              <option key={days} value={days}>
-                {label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <p className="-mt-1 text-xs opacity-70">
-          &ldquo;Still in Brno?&rdquo; around 6 pm your time, only if you
-          haven&apos;t logged anything in that time. Goes to every device where
-          notifications are on.
-        </p>
-        {reminderError && (
-          <p className="text-sm text-red-500">{reminderError}</p>
+        {status === 'on' && (
+          <>
+            {/* What you get: all on, only the reminders can be tuned. */}
+            <ul className="bg-base-100 rounded-field divide-base-200 divide-y text-sm">
+              <li className="flex items-center justify-between gap-3 px-4 py-3">
+                <span>An Električka rolls into your city</span>
+                <span className="shrink-0 text-xs opacity-60">Always</span>
+              </li>
+              <li className="flex items-center justify-between gap-3 px-4 py-3">
+                <span>An Električka is on its way to you</span>
+                <span className="shrink-0 text-xs opacity-60">Always</span>
+              </li>
+              <li className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+                <span>You haven&apos;t logged a city in a while</span>
+                <select
+                  aria-label="Check-in reminders"
+                  className="select select-sm w-auto"
+                  value={shownReminderDays}
+                  onChange={(e) => changeReminderDays(Number(e.target.value))}
+                >
+                  {REMINDER_OPTIONS.map(([days, label]) => (
+                    <option key={days} value={days}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </li>
+            </ul>
+            {reminderError && (
+              <p className="text-sm text-red-500">{reminderError}</p>
+            )}
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={test}
+                disabled={busy}
+                className="btn btn-outline btn-sm"
+              >
+                Send me a test
+              </button>
+              <button
+                type="button"
+                onClick={turnOff}
+                disabled={busy}
+                className="btn btn-ghost btn-sm"
+              >
+                Turn off on this device
+              </button>
+            </div>
+          </>
         )}
 
         {message && <p className="text-sm">{message}</p>}
         {error && <p className="text-sm text-red-500">{error}</p>}
-
-        {(status === 'off' || status === 'on') && (
-          <div className="card-actions justify-end">
-            {status === 'off' ? (
-              <button
-                type="button"
-                onClick={turnOn}
-                disabled={busy}
-                className="btn btn-neutral"
-              >
-                {busy ? 'Turning on...' : 'Turn on notifications'}
-              </button>
-            ) : (
-              <>
-                <button
-                  type="button"
-                  onClick={turnOff}
-                  disabled={busy}
-                  className="btn btn-ghost"
-                >
-                  Turn off
-                </button>
-                <button
-                  type="button"
-                  onClick={test}
-                  disabled={busy}
-                  className="btn btn-outline"
-                >
-                  Send me a test
-                </button>
-              </>
-            )}
-          </div>
-        )}
       </div>
     </section>
   )
