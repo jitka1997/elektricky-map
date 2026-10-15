@@ -40,7 +40,9 @@ export const authenticate = async (request: Request) => {
   let uid: string
   try {
     ;({ uid } = await auth.verifyIdToken(token))
-  } catch {
+  } catch (error) {
+    // Expired or forged tokens end up here; the code says which.
+    console.warn('Sign-in check failed:', (error as { code?: string }).code)
     return null
   }
   const userDoc = await adminDb().doc(`users/${uid}`).get()
