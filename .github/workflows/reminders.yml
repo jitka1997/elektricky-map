@@ -24,8 +24,17 @@ jobs:
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
           APP_URL: ${{ vars.APP_URL }}
-        # Prints counts only ({"checked":5,"due":1,"sent":1}); the log is public.
+        # Counts only ({"checked":5,"due":1,"sent":1}); the log is public.
+        # Also shown on the run's Summary page.
         run: |
-          curl --fail-with-body --silent --show-error --max-time 120 \
+          # ${APP_URL%/}: works with or without a slash at the end.
+          result=$(curl --fail-with-body --silent --show-error --max-time 120 \
             -X POST -H "Authorization: Bearer $CRON_SECRET" \
-            "$APP_URL/api/cron/reminders"
+            "${APP_URL%/}/api/cron/reminders") || { echo "$result"; exit 1; }
+          echo "$result"
+          # Anything but the counts (e.g. a redirect page) means it didn't run.
+          case "$result" in
+            *'"checked"'*) ;;
+            *) echo "::error::Unexpected answer from the site"; exit 1 ;;
+          esac
+          echo "Reminders: \`$result\`" >> "$GITHUB_STEP_SUMMARY"
