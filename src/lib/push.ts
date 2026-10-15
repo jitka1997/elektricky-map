@@ -14,7 +14,15 @@ const callApi = async (path: string, method: string, body: unknown) => {
     },
     body: JSON.stringify(body),
   })
-  if (!response.ok) throw new Error(`${path} failed (${response.status})`)
+  if (!response.ok) {
+    const { error } = await response.json().catch(() => ({ error: null }))
+    throw new Error(
+      error ??
+        (response.status >= 500
+          ? `Server error (${response.status}). The Vercel logs say why.`
+          : `Request failed (${response.status})`)
+    )
+  }
   return response.json()
 }
 

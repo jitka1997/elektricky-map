@@ -32,7 +32,10 @@ const NotificationSettings = () => {
       await action()
     } catch (e) {
       console.error(e)
-      setError('Something went wrong. Please try again.')
+      // Show the reason: it's what tells us what to fix.
+      setError(
+        `Something went wrong: ${e instanceof Error ? e.message : String(e)}`
+      )
     } finally {
       setBusy(false)
     }

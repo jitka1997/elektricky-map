@@ -10,7 +10,16 @@ const app = () => {
   if (existing) return existing
   const key = process.env.FIREBASE_SERVICE_ACCOUNT
   if (!key) throw new Error('FIREBASE_SERVICE_ACCOUNT is not set')
-  return initializeApp({ credential: cert(JSON.parse(key)) })
+  let parsed
+  try {
+    parsed = JSON.parse(key)
+  } catch {
+    // Not the parser's message: it can quote part of the key into the logs.
+    throw new Error(
+      'FIREBASE_SERVICE_ACCOUNT is not valid JSON (paste it as one line)'
+    )
+  }
+  return initializeApp({ credential: cert(parsed) })
 }
 
 export const adminDb = () => getFirestore(app())
@@ -25,13 +34,17 @@ export const authenticate = async (request: Request) => {
     .get('authorization')
     ?.match(/^Bearer (.+)$/)?.[1]
   if (!token) return null
+  // A setup problem (missing or broken key) throws here and shows in the
+  // server logs, rather than looking like "not signed in".
+  const auth = getAuth(app())
+  let uid: string
   try {
-    const { uid } = await getAuth(app()).verifyIdToken(token)
-    const userDoc = await adminDb().doc(`users/${uid}`).get()
-    return userDoc.exists ? uid : null
+    ;({ uid } = await auth.verifyIdToken(token))
   } catch {
     return null
   }
+  const userDoc = await adminDb().doc(`users/${uid}`).get()
+  return userDoc.exists ? uid : null
 }
 
 export const unauthorized = () =>
