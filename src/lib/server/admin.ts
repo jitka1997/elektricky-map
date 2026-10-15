@@ -49,3 +49,21 @@ export const authenticate = async (request: Request) => {
 
 export const unauthorized = () =>
   Response.json({ error: 'Sign in first.' }, { status: 401 })
+
+/**
+ * Wraps a route handler so a failure answers with its reason (e.g. "VAPID
+ * keys are not set") instead of a bare 500, and is logged in Vercel.
+ */
+export const withErrors =
+  (handler: (request: Request) => Promise<Response>) =>
+  async (request: Request) => {
+    try {
+      return await handler(request)
+    } catch (error) {
+      console.error(error)
+      return Response.json(
+        { error: error instanceof Error ? error.message : 'Server error' },
+        { status: 500 }
+      )
+    }
+  }

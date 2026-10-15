@@ -88,6 +88,19 @@ export const enablePush = async (): Promise<PushStatus> => {
   return 'on'
 }
 
+/**
+ * If this device is subscribed, saves the subscription on the server again.
+ * Fixes a phone that thinks it's on while the server never saved it (or
+ * removed it), and picks up a subscription the browser renewed by itself.
+ */
+export const resyncPush = async () => {
+  const subscription = await currentSubscription()
+  if (!subscription) return
+  await callApi('/api/push/devices', 'POST', {
+    subscription: subscription.toJSON(),
+  })
+}
+
 /** Stops notifications on this device. */
 export const disablePush = async () => {
   const subscription = await currentSubscription()

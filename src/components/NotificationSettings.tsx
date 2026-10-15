@@ -7,6 +7,7 @@ import {
   enablePush,
   getPushStatus,
   type PushStatus,
+  resyncPush,
   sendTestPush,
 } from '@/lib/push'
 
@@ -20,7 +21,13 @@ const NotificationSettings = () => {
 
   useEffect(() => {
     getPushStatus()
-      .then(setStatus)
+      .then((status) => {
+        setStatus(status)
+        if (status === 'on')
+          resyncPush().catch((e) =>
+            setError(`Couldn't sync this device: ${e.message}`)
+          )
+      })
       .catch(() => setStatus('unsupported'))
   }, [])
 

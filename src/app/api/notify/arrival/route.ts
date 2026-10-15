@@ -5,7 +5,12 @@ import {
 } from 'firebase-admin/firestore'
 
 import { shortName } from '@/lib/names'
-import { adminDb, authenticate, unauthorized } from '@/lib/server/admin'
+import {
+  adminDb,
+  authenticate,
+  unauthorized,
+  withErrors,
+} from '@/lib/server/admin'
 import { sendToUsers } from '@/lib/server/push'
 
 const HOUR = 60 * 60 * 1000
@@ -29,7 +34,7 @@ const validTimeZone = (tz: unknown) => {
  * logged for about now, or "Ani is coming to Brno on 3 Nov" for a planned one.
  * Entries logged for the past don't notify anyone. Each entry notifies once.
  */
-export async function POST(request: Request) {
+async function notifyArrival(request: Request) {
   const userId = await authenticate(request)
   if (!userId) return unauthorized()
 
@@ -120,3 +125,5 @@ export async function POST(request: Request) {
         )
   return Response.json({ sent })
 }
+
+export const POST = withErrors(notifyArrival)

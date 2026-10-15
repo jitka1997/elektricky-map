@@ -1,6 +1,6 @@
 import { FieldValue } from 'firebase-admin/firestore'
 
-import { authenticate, unauthorized } from '@/lib/server/admin'
+import { authenticate, unauthorized, withErrors } from '@/lib/server/admin'
 import { deviceId, devicesOf } from '@/lib/server/push'
 
 type Subscription = {
@@ -9,7 +9,7 @@ type Subscription = {
 }
 
 // Turn notifications on for this device: save its push subscription.
-export async function POST(request: Request) {
+async function saveDevice(request: Request) {
   const userId = await authenticate(request)
   if (!userId) return unauthorized()
 
@@ -40,7 +40,7 @@ export async function POST(request: Request) {
 }
 
 // Turn notifications off for this device.
-export async function DELETE(request: Request) {
+async function removeDevice(request: Request) {
   const userId = await authenticate(request)
   if (!userId) return unauthorized()
 
@@ -51,3 +51,6 @@ export async function DELETE(request: Request) {
   await devicesOf(userId).doc(deviceId(endpoint)).delete()
   return Response.json({ ok: true })
 }
+
+export const POST = withErrors(saveDevice)
+export const DELETE = withErrors(removeDevice)

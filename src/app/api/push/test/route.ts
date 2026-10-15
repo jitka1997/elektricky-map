@@ -1,8 +1,8 @@
-import { authenticate, unauthorized } from '@/lib/server/admin'
+import { authenticate, unauthorized, withErrors } from '@/lib/server/admin'
 import { sendToUsers } from '@/lib/server/push'
 
 // "Send me a test" on the Profile page: a notification to all your devices.
-export async function POST(request: Request) {
+async function sendTest(request: Request) {
   const userId = await authenticate(request)
   if (!userId) return unauthorized()
 
@@ -18,3 +18,5 @@ export async function POST(request: Request) {
   )
   return Response.json({ sent })
 }
+
+export const POST = withErrors(sendTest)
