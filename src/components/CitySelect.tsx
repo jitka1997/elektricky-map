@@ -198,7 +198,7 @@ const LocationSelect: React.FC = () => {
         <div className="pointer-events-none fixed inset-x-0 top-[72px] z-[2000] flex justify-center px-4">
           <div
             role="status"
-            className="bg-neutral text-neutral-content rounded-box pointer-events-auto flex max-w-md animate-[meet-in_0.3s_ease-out] items-center gap-3 px-5 py-4 text-lg font-semibold shadow-xl"
+            className="bg-neutral text-neutral-content rounded-box pointer-events-auto flex max-w-md items-center gap-3 px-5 py-4 text-lg font-semibold shadow-xl motion-safe:animate-[meet-in_0.3s_ease-out]"
           >
             <span>{meetMessage}</span>
             <button

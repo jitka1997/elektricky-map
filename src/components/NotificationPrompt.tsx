@@ -1,5 +1,6 @@
 'use client'
 
+import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
 
@@ -32,7 +33,8 @@ const snooze = (days: number) => {
 // Runs when the app opens. If notifications are on for this device, quietly
 // re-saves its address on the server (browsers sometimes renew it, which
 // would otherwise stop notifications without anyone noticing). If they're
-// off, invites the user to turn them on; "Not now" hides it for a week.
+// off, invites the user to turn them on with a pop-up in the middle of the
+// screen; "Not now" (or tapping outside it) hides it for a week.
 // If they've allowed notifications in the phone's settings (after blocking
 // them), one more tap is needed to register the device, so it says that.
 // Nobody who turned them off on Profile gets asked again.
@@ -42,7 +44,8 @@ const NotificationPrompt = () => {
   // Allowed in settings already; only the device registration is missing.
   const [finishing, setFinishing] = useState(false)
   const [busy, setBusy] = useState(false)
-  const [message, setMessage] = useState<string | null>(null)
+  const [done, setDone] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     getPushStatus()
@@ -58,24 +61,38 @@ const NotificationPrompt = () => {
   }, [])
 
   // The Profile page has its own notification settings.
-  if (!show || pathname === '/profile') return null
+  const visible = show && pathname !== '/profile'
+
+  // Escape closes it like "Not now".
+  useEffect(() => {
+    if (!visible) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      snooze(SNOOZE_DAYS)
+      setShow(false)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [visible])
+
+  if (!visible) return null
 
   const turnOn = async () => {
     setBusy(true)
-    setMessage(null)
+    setError(null)
     try {
       const status = await enablePush()
       if (status === 'on') {
-        setMessage('Crrrrn! Notifications are on.')
+        setDone(true)
         setTimeout(() => setShow(false), 2500)
       } else if (status === 'denied') {
         // The browser won't ask again; Profile explains how to allow it in
-        // settings, and this card comes back as "one more tap" once they do.
+        // settings, and this comes back as "one more tap" once they do.
         setShow(false)
       }
     } catch (e) {
       console.error(e)
-      setMessage(
+      setError(
         `Couldn't turn them on: ${e instanceof Error ? e.message : String(e)}`
       )
     } finally {
@@ -89,40 +106,58 @@ const NotificationPrompt = () => {
   }
 
   return (
-    <div className="fixed inset-x-2 bottom-2 z-[2000] mx-auto max-w-sm">
-      <div className="bg-base-200 border-base-300 rounded-box text-base-content flex flex-col gap-3 border p-4 text-sm shadow-lg">
-        <p>
-          {message ??
-            (finishing ? (
-              <>
-                Notifications are allowed. One more tap to start getting a{' '}
-                <span className="font-semibold">Crrrrn!</span> when an
-                Električka rolls into your city.
-              </>
-            ) : (
-              <>
-                Want a <span className="font-semibold">Crrrrn!</span> when an
-                Električka rolls into your city? Turn on notifications.
-              </>
-            ))}
+    // Tapping outside the box counts as "Not now", like in other apps.
+    <div
+      className="fixed inset-0 z-[3000] flex items-center justify-center bg-black/50 p-4 motion-safe:animate-[fade-in_0.2s_ease-out]"
+      onClick={busy || done ? undefined : notNow}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="notification-prompt-title"
+        onClick={(e) => e.stopPropagation()}
+        className="bg-base-100 text-base-content rounded-box flex w-full max-w-sm flex-col items-center gap-4 p-6 text-center shadow-2xl motion-safe:animate-[pop-in_0.25s_ease-out]"
+      >
+        <Image
+          src="/icons/icon-192.png"
+          alt=""
+          width={80}
+          height={80}
+          className="rounded-2xl shadow-md"
+        />
+        <h2 id="notification-prompt-title" className="text-2xl font-bold">
+          {done
+            ? "Crrrrn! You're all set"
+            : finishing
+              ? 'One more tap'
+              : "Don't miss a Crrrrn!"}
+        </h2>
+        <p className="opacity-80">
+          {done
+            ? "You'll hear when an Električka rolls into your city."
+            : finishing
+              ? 'Notifications are allowed. Tap below so this phone starts getting them.'
+              : 'Get a notification when an Električka rolls into your city, or is on the way.'}
         </p>
-        {!message?.startsWith('Crrrrn') && (
-          <div className="flex justify-end gap-2">
-            <button
-              type="button"
-              onClick={notNow}
-              disabled={busy}
-              className="btn btn-ghost btn-sm"
-            >
-              Not now
-            </button>
+        {error && <p className="text-sm text-red-500">{error}</p>}
+        {!done && (
+          <div className="flex w-full flex-col gap-2">
             <button
               type="button"
               onClick={turnOn}
               disabled={busy}
-              className="btn btn-neutral btn-sm"
+              autoFocus
+              className="btn btn-neutral btn-lg w-full"
             >
-              {busy ? 'Turning on...' : 'Turn on'}
+              {busy ? 'Turning on...' : 'Turn on notifications'}
+            </button>
+            <button
+              type="button"
+              onClick={notNow}
+              disabled={busy}
+              className="btn btn-ghost w-full"
+            >
+              Not now
             </button>
           </div>
         )}
