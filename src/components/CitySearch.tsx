@@ -139,9 +139,14 @@ const CitySearch: React.FC<Props> = ({ value, onSelect }) => {
 
       pickSuggestion(city)
     } catch (err) {
+      // A timed-out lookup is a TimeoutError in Chrome but an AbortError
+      // ("Fetch is aborted") in Safari.
+      const timedOut =
+        err instanceof Error &&
+        (err.name === 'TimeoutError' || err.name === 'AbortError')
       setError(
-        err instanceof Error && err.name === 'TimeoutError'
-          ? "City lookup isn't answering right now. Please try again in a moment."
+        timedOut
+          ? "City search isn't answering right now. It's a free service that's sometimes down. Please try again in a moment."
           : err instanceof Error
             ? err.message
             : 'An unknown error occurred'
