@@ -1,7 +1,7 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { useEffect, useMemo, useState } from 'react'
+import { Suspense, useEffect, useMemo, useState } from 'react'
 
 import Container from '@/components/Container'
 import MeStats, { Empty } from '@/components/stats/MeStats'
@@ -9,69 +9,43 @@ import TogetherStats from '@/components/stats/TogetherStats'
 import Toggle from '@/components/stats/Toggle'
 import { useAuth } from '@/lib/AuthContext'
 import { useLocations } from '@/lib/LocationContext'
-import { shortName } from '@/lib/names'
-import {
-  personStats,
-  type Place,
-  type StatsPerson,
-  toEntries,
-  toStays,
-} from '@/lib/stats'
+import { periodStart, personStats, toPeople } from '@/lib/stats'
+import { statsQuery, useStatsView } from '@/lib/statsParams'
 
-type Period = 'year' | 'all'
-type Tab = 'me' | 'together'
+const Spinner = () => (
+  <div className="flex h-screen items-center justify-center">
+    <span className="loading loading-spinner loading-lg"></span>
+  </div>
+)
 
-const StatsPage = () => {
+const StatsView = () => {
   const { user, loading } = useAuth()
-  const { locationData, isLoading, setFlyTarget } = useLocations()
+  const { locationData, isLoading } = useLocations()
   const router = useRouter()
+  const { view, params, update } = useStatsView()
 
   // Fixed for the visit, so every number is measured to the same moment.
   const [now] = useState(() => Date.now())
-  const [viewerId, setViewerId] = useState<string | null>(null)
-  const [period, setPeriod] = useState<Period>('year')
-  const [tab, setTab] = useState<Tab>('me')
 
   useEffect(() => {
     if (!loading && !user) router.push('/login')
   }, [loading, user, router])
 
-  const people = useMemo<StatsPerson[]>(
-    () =>
-      locationData
-        .map((u) => {
-          const entries = toEntries(u.locations ?? [], now)
-          return {
-            id: u.userId,
-            name: shortName(u.userName, u.customName) || 'Anonymous',
-            photoURL: u.photoURL,
-            entries,
-            stays: toStays(entries, now),
-          }
-        })
-        .filter((p) => p.entries.length > 0),
-    [locationData, now]
-  )
+  const people = useMemo(() => toPeople(locationData, now), [locationData, now])
 
-  if (loading || isLoading || !user) {
-    return (
-      <div className="flex h-screen items-center justify-center">
-        <span className="loading loading-spinner loading-lg"></span>
-      </div>
-    )
-  }
+  if (loading || isLoading || !user) return <Spinner />
 
   const year = new Date(now).getFullYear()
-  const from = period === 'year' ? new Date(year, 0, 1).getTime() : 0
+  const from = periodStart(view.period, now)
   const viewer =
-    people.find((p) => p.id === (viewerId ?? user.uid)) ??
+    people.find((p) => p.id === (view.user ?? user.uid)) ??
     people.find((p) => p.id === user.uid)
   const isMe = viewer?.id === user.uid
 
-  const showOnMap = (place: Place) => {
-    setFlyTarget({ lat: place.lat, lng: place.lng })
-    router.push('/')
-  }
+  // The map link keeps the whole stats view, so "Back to stats" (or the
+  // browser's Back) returns to exactly this.
+  const recordHref = (record: string) =>
+    `/${statsQuery(params, { record, user: viewer?.id ?? null })}`
 
   return (
     <Container className="text-base-content flex flex-col gap-6 py-8">
@@ -83,7 +57,10 @@ const StatsPage = () => {
             <select
               className="select select-sm w-auto font-semibold"
               value={viewer?.id ?? user.uid}
-              onChange={(e) => setViewerId(e.target.value)}
+              // Another person is a new view: Back returns to the previous one.
+              onChange={(e) =>
+                update({ user: e.target.value, with: null }, 'push')
+              }
             >
               {!viewer && <option value={user.uid}>You</option>}
               {people.map((p) => (
@@ -95,57 +72,60 @@ const StatsPage = () => {
           </label>
           <Toggle
             label="Period"
-            value={period}
+            value={view.period}
             options={[
               ['year', String(year)],
               ['all', 'All time'],
             ]}
-            onChange={setPeriod}
+            onChange={(period) => update({ period })}
           />
         </div>
       </div>
 
       <div role="tablist" className="tabs tabs-border">
-        <button
-          type="button"
-          role="tab"
-          aria-selected={tab === 'me'}
-          onClick={() => setTab('me')}
-          className={`tab font-semibold ${tab === 'me' ? 'tab-active' : ''}`}
-        >
-          {isMe || !viewer ? 'Me' : viewer.name}
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={tab === 'together'}
-          onClick={() => setTab('together')}
-          className={`tab font-semibold ${tab === 'together' ? 'tab-active' : ''}`}
-        >
-          Together
-        </button>
+        {(
+          [
+            ['me', isMe || !viewer ? 'Me' : viewer.name],
+            ['together', 'Together'],
+          ] as const
+        ).map(([tab, text]) => (
+          <button
+            key={tab}
+            type="button"
+            role="tab"
+            aria-selected={view.tab === tab}
+            onClick={() => update({ tab }, 'push')}
+            className={`tab font-semibold ${view.tab === tab ? 'tab-active' : ''}`}
+          >
+            {text}
+          </button>
+        ))}
       </div>
 
       {!viewer ? (
         <Empty>Log your first location on the map to see your stats.</Empty>
-      ) : tab === 'me' ? (
+      ) : view.tab === 'me' ? (
         <MeStats
-          key={viewer.id}
           stats={personStats(viewer.entries, viewer.stays, from, now)}
           name={isMe ? null : viewer.name}
-          periodWord={period === 'year' ? 'this year' : 'overall'}
+          periodWord={view.period === 'year' ? 'this year' : 'overall'}
           now={now}
-          onShowOnMap={showOnMap}
+          rankBy={view.rank}
+          modeBy={view.modes}
+          onRankByChange={(rank) => update({ rank })}
+          onModeByChange={(modes) => update({ modes })}
+          recordHref={recordHref}
         />
       ) : (
         <TogetherStats
-          key={viewer.id}
           people={people}
           viewerId={viewer.id}
           meId={user.uid}
           from={from}
           now={now}
-          periodText={period === 'year' ? `in ${year}` : 'so far'}
+          periodText={view.period === 'year' ? `in ${year}` : 'so far'}
+          withId={view.with}
+          onWithChange={(id) => update({ with: id })}
         />
       )}
 
@@ -167,13 +147,20 @@ const StatsPage = () => {
             Home is the city where someone has spent the most time overall.
           </li>
           <li>
-            Distances are straight lines between cities, like the journey lines
-            on the map.
+            Distances are the shortest way between two cities over the
+            Earth&apos;s surface, as the crow flies, added up trip by trip.
           </li>
         </ul>
       </details>
     </Container>
   )
 }
+
+// Reading the URL needs a Suspense boundary for the production build.
+const StatsPage = () => (
+  <Suspense fallback={<Spinner />}>
+    <StatsView />
+  </Suspense>
+)
 
 export default StatsPage

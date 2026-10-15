@@ -1,19 +1,17 @@
-import { useState } from 'react'
+import Link from 'next/link'
 
 import ModeDonut from '@/components/stats/ModeDonut'
 import PlaceBars from '@/components/stats/PlaceBars'
 import Toggle from '@/components/stats/Toggle'
-import TravelModeIcon from '@/components/TravelModeIcon'
+import { describeRecord } from '@/lib/records'
 import {
   daysAgo,
-  formatDay,
   formatDuration,
   formatKm,
-  formatRange,
   type PersonStats,
-  type Place,
   plural,
 } from '@/lib/stats'
+import { type RecordId, RECORDS } from '@/lib/statsParams'
 
 type Props = {
   stats: PersonStats
@@ -21,15 +19,27 @@ type Props = {
   name: string | null
   periodWord: string
   now: number
-  onShowOnMap: (place: Place) => void
+  rankBy: 'time' | 'visits'
+  modeBy: 'trips' | 'km'
+  onRankByChange: (value: 'time' | 'visits') => void
+  onModeByChange: (value: 'trips' | 'km') => void
+  // Link to the map showing a record.
+  recordHref: (id: RecordId) => string
 }
 
 const TOP_PLACES = 8
 
-const MeStats = ({ stats: st, name, periodWord, now, onShowOnMap }: Props) => {
-  const [rankBy, setRankBy] = useState<'time' | 'visits'>('time')
-  const [modeBy, setModeBy] = useState<'trips' | 'km'>('trips')
-
+const MeStats = ({
+  stats: st,
+  name,
+  periodWord,
+  now,
+  rankBy,
+  modeBy,
+  onRankByChange,
+  onModeByChange,
+  recordHref,
+}: Props) => {
   // Home dwarfs everything else, so it gets its own line and the bars compare
   // the places away from home.
   const ranked = rankBy === 'time' ? st.time : st.visits
@@ -39,53 +49,9 @@ const MeStats = ({ stats: st, name, periodWord, now, onShowOnMap }: Props) => {
   const format =
     rankBy === 'time' ? formatDuration : (v: number) => plural(v, 'visit')
 
-  const { longestLeg, farthest, longestAway, busiestWeek, newPlaces } = st
-  const records: {
-    label: string
-    value: string
-    detail: React.ReactNode
-    place?: Place
-  }[] = []
-  if (longestLeg)
-    records.push({
-      label: 'Longest trip',
-      value: formatKm(longestLeg.km),
-      detail: (
-        <>
-          {longestLeg.from.city} → {longestLeg.to.city}{' '}
-          <TravelModeIcon mode={longestLeg.mode} /> ·{' '}
-          {formatDay(longestLeg.time)}
-        </>
-      ),
-      place: longestLeg.to,
-    })
-  if (farthest && st.home && farthest.km > 0)
-    records.push({
-      label: 'Farthest from home',
-      value: farthest.place.city,
-      detail: `${formatKm(farthest.km)} from ${st.home.city}`,
-      place: farthest.place,
-    })
-  if (longestAway)
-    records.push({
-      label: 'Longest time away',
-      value: formatDuration(longestAway.end - longestAway.start),
-      detail: `${longestAway.places.map((p) => p.city).join(', ')} · ${formatRange(longestAway.start, longestAway.end)}`,
-      place: longestAway.places[0],
-    })
-  if (busiestWeek)
-    records.push({
-      label: 'Busiest week',
-      value: plural(busiestWeek.places.length, 'city'),
-      detail: `${busiestWeek.places.map((p) => p.city).join(', ')} · from ${formatDay(busiestWeek.start)}`,
-    })
-  records.push({
-    label: 'New cities',
-    value: String(newPlaces.length),
-    detail: newPlaces.length
-      ? `Latest: ${newPlaces[0].place.city} · ${formatDay(newPlaces[0].time)}`
-      : `None ${periodWord}`,
-    place: newPlaces[0]?.place,
+  const records = RECORDS.flatMap((id) => {
+    const text = describeRecord(id, st, periodWord, name)
+    return text ? [{ id, ...text }] : []
   })
 
   return (
@@ -133,7 +99,7 @@ const MeStats = ({ stats: st, name, periodWord, now, onShowOnMap }: Props) => {
                   ['time', 'By time'],
                   ['visits', 'By visits'],
                 ]}
-                onChange={setRankBy}
+                onChange={onRankByChange}
               />
             </div>
             {st.home && homeValue !== undefined && (
@@ -177,7 +143,7 @@ const MeStats = ({ stats: st, name, periodWord, now, onShowOnMap }: Props) => {
                   ['trips', 'Trips'],
                   ['km', 'Km'],
                 ]}
-                onChange={setModeBy}
+                onChange={onModeByChange}
               />
             </div>
             {st.legs.length ? (
@@ -195,8 +161,11 @@ const MeStats = ({ stats: st, name, periodWord, now, onShowOnMap }: Props) => {
           <div className="grid gap-x-5 sm:grid-cols-2 lg:grid-cols-3">
             {records.map((r) => (
               <div
-                key={r.label}
-                className="border-base-300 flex flex-col gap-0.5 border-t py-4"
+                key={r.id}
+                // "Back to stats" from the map scrolls here; the margin keeps
+                // it clear of the fixed navbar.
+                id={`record-${r.id}`}
+                className="border-base-300 flex scroll-mt-24 flex-col gap-0.5 border-t py-4"
               >
                 <span className="text-xs font-semibold tracking-wide uppercase opacity-70">
                   {r.label}
@@ -205,24 +174,16 @@ const MeStats = ({ stats: st, name, periodWord, now, onShowOnMap }: Props) => {
                   {r.value}
                 </span>
                 <span className="text-sm opacity-80">{r.detail}</span>
-                {r.place && <ShowOnMap onClick={() => onShowOnMap(r.place!)} />}
+                {r.value !== '0' && (
+                  <Link
+                    href={recordHref(r.id)}
+                    className="link mt-1 self-start text-sm font-semibold"
+                  >
+                    Show on map
+                  </Link>
+                )}
               </div>
             ))}
-            {st.edges && (
-              <div className="border-base-300 flex flex-col gap-1 border-t py-4">
-                <span className="text-xs font-semibold tracking-wide uppercase opacity-70">
-                  {name ? `Edges of ${name}'s map` : 'Edges of your map'}
-                </span>
-                <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-sm">
-                  {(['N', 'S', 'E', 'W'] as const).map((dir) => (
-                    <div key={dir} className="contents">
-                      <dt className="font-semibold opacity-70">{dir}</dt>
-                      <dd>{st.edges![dir].city}</dd>
-                    </div>
-                  ))}
-                </dl>
-              </div>
-            )}
           </div>
         </div>
       </section>
@@ -250,16 +211,6 @@ const Headline = ({
       <span className="text-xs opacity-70">{detail}</span>
     </div>
   </div>
-)
-
-export const ShowOnMap = ({ onClick }: { onClick: () => void }) => (
-  <button
-    type="button"
-    onClick={onClick}
-    className="link mt-1 self-start text-sm font-semibold"
-  >
-    Show on map
-  </button>
 )
 
 export const Empty = ({ children }: { children: React.ReactNode }) => (

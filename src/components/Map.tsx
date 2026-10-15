@@ -3,9 +3,11 @@
 import 'leaflet/dist/leaflet.css'
 
 import L from 'leaflet'
+import { useSearchParams } from 'next/navigation'
 import { useEffect, useReducer, useRef, useState } from 'react'
 import { MapContainer, Marker, Popup, TileLayer, useMap } from 'react-leaflet'
 
+import RecordOverlay from '@/components/RecordOverlay'
 import { useAuth } from '@/lib/AuthContext'
 import { formatDate, formatTime } from '@/lib/dates'
 import { useLocations } from '@/lib/LocationContext'
@@ -84,21 +86,6 @@ const LocationMarker = () => {
       Fly to my location
     </button>
   )
-}
-
-// Flies to a place requested from another page (e.g. "Show on map" on the
-// stats page), then clears the request so it only happens once.
-const FlyToTarget = () => {
-  const map = useMap()
-  const { flyTarget, setFlyTarget } = useLocations()
-
-  useEffect(() => {
-    if (!flyTarget) return
-    map.flyTo([flyTarget.lat, flyTarget.lng], 8)
-    setFlyTarget(null)
-  }, [flyTarget, map, setFlyTarget])
-
-  return null
 }
 
 type BaseMarker = {
@@ -513,6 +500,8 @@ const Map = () => {
   const { isLoading } = useLocations()
   // The user whose journey is currently animating (their static pin is hidden).
   const [playingUserId, setPlayingUserId] = useState<string | null>(null)
+  // A stats record to draw instead of everyone's pins (see RecordOverlay).
+  const showingRecord = useSearchParams().has('record')
 
   if (isLoading) {
     return (
@@ -534,14 +523,20 @@ const Map = () => {
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
-        <UserMarkers hiddenUserId={playingUserId} />
-        <FlyToTarget />
-        {/* Top-right control stack — flexbox spacing so the gap is consistent
-            across screen sizes regardless of each control's height. */}
-        <div className="pointer-events-none absolute top-2 right-2 z-[1000] flex flex-col items-end gap-2">
-          <Journey onActiveChange={setPlayingUserId} />
-          <LocationMarker />
-        </div>
+        {showingRecord ? (
+          <RecordOverlay />
+        ) : (
+          <>
+            <UserMarkers hiddenUserId={playingUserId} />
+            {/* Top-right control stack — flexbox spacing so the gap is
+                consistent across screen sizes regardless of each control's
+                height. */}
+            <div className="pointer-events-none absolute top-2 right-2 z-[1000] flex flex-col items-end gap-2">
+              <Journey onActiveChange={setPlayingUserId} />
+              <LocationMarker />
+            </div>
+          </>
+        )}
       </MapContainer>
     </div>
   )

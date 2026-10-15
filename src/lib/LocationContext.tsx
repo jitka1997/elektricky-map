@@ -30,10 +30,6 @@ interface LocationContextType {
   // A counter bumped to request the map fly to the current user's pin.
   flySignal: number
   requestFlyToMyLocation: () => void
-  // A place the map should fly to when it next shows (e.g. "Show on map" on
-  // the stats page); the map clears it once it has flown there.
-  flyTarget: { lat: number; lng: number } | null
-  setFlyTarget: (target: { lat: number; lng: number } | null) => void
   isLoading: boolean
 }
 
@@ -46,10 +42,6 @@ export const LocationProvider = ({ children }: { children: ReactNode }) => {
   const [locationData, setLocationData] = useState<LocationData[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [flySignal, setFlySignal] = useState(0)
-  const [flyTarget, setFlyTarget] = useState<{
-    lat: number
-    lng: number
-  } | null>(null)
 
   const requestFlyToMyLocation = () => setFlySignal((s) => s + 1)
 
@@ -189,8 +181,6 @@ export const LocationProvider = ({ children }: { children: ReactNode }) => {
         addLocation,
         flySignal,
         requestFlyToMyLocation,
-        flyTarget,
-        setFlyTarget,
         isLoading,
       }}
     >

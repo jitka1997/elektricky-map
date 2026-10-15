@@ -1,6 +1,8 @@
 import { toDate } from '@/lib/dates'
 import type { LocationEntry } from '@/lib/firebase'
+import { shortName } from '@/lib/names'
 import { DEFAULT_TRAVEL_MODE, TravelMode } from '@/lib/travel'
+import type { LocationData } from '@/lib/types'
 
 export const DAY = 86_400_000
 const EARTH_KM = 40_075
@@ -166,7 +168,8 @@ export const personStats = (
         .sort((a, b) => b.km - a.km)[0]
     : undefined
 
-  type AwayRun = { start: number; end: number; places: Place[] }
+  // The stays of a trip away from home, in order (`places` without repeats).
+  type AwayRun = { start: number; end: number; places: Place[]; stays: Stay[] }
   let run: AwayRun | null = null
   let longestAway = null as AwayRun | null
   for (const s of inPeriod) {
@@ -174,29 +177,28 @@ export const personStats = (
       run = null
       continue
     }
-    if (!run) run = { start: s.start, end: s.end, places: [] }
+    if (!run) run = { start: s.start, end: s.end, places: [], stays: [] }
     run.end = s.end
+    run.stays.push(s)
     if (!run.places.some((p) => p.key === s.place.key)) run.places.push(s.place)
     if (
       !longestAway ||
       run.end - run.start > longestAway.end - longestAway.start
     )
-      longestAway = { ...run, places: [...run.places] }
+      longestAway = { ...run, places: [...run.places], stays: [...run.stays] }
   }
 
   // The most different cities within 7 days of arriving somewhere.
-  let busiestWeek: { start: number; places: Place[] } | null = null
+  let busiestWeek: { start: number; places: Place[]; stays: Stay[] } | null =
+    null
   for (const l of legs) {
-    const end = Math.min(l.time + 7 * DAY, to)
+    const weekStays = clip(stays, l.time, Math.min(l.time + 7 * DAY, to))
     const weekPlaces: Place[] = []
-    for (const s of stays) {
-      if (s.start < end && s.end > l.time) {
-        if (!weekPlaces.some((p) => p.key === s.place.key))
-          weekPlaces.push(s.place)
-      }
-    }
+    for (const s of weekStays)
+      if (!weekPlaces.some((p) => p.key === s.place.key))
+        weekPlaces.push(s.place)
     if (!busiestWeek || weekPlaces.length > busiestWeek.places.length)
-      busiestWeek = { start: l.time, places: weekPlaces }
+      busiestWeek = { start: l.time, places: weekPlaces, stays: weekStays }
   }
 
   // First time ever in a city (not counting where they started logging).
@@ -359,3 +361,27 @@ export type StatsPerson = {
   entries: Entry[]
   stays: Stay[]
 }
+
+/** Everyone who has logged something, ready for the stats views. */
+export const toPeople = (
+  locationData: LocationData[],
+  now: number
+): StatsPerson[] =>
+  locationData
+    .map((u) => {
+      const entries = toEntries(u.locations ?? [], now)
+      return {
+        id: u.userId,
+        name: shortName(u.userName, u.customName) || 'Anonymous',
+        photoURL: u.photoURL,
+        entries,
+        stays: toStays(entries, now),
+      }
+    })
+    .filter((p) => p.entries.length > 0)
+
+export type Period = 'year' | 'all'
+
+/** When a period starts: 1 January of the current year, or the beginning. */
+export const periodStart = (period: Period, now: number) =>
+  period === 'year' ? new Date(new Date(now).getFullYear(), 0, 1).getTime() : 0

@@ -1,7 +1,7 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
+import { Suspense, useEffect, useState } from 'react'
 
 import CitySearch from '@/components/CitySearch'
 import Container from '@/components/Container'
@@ -22,7 +22,7 @@ import { shortName } from '@/lib/names'
 import { DEFAULT_TRAVEL_MODE, TravelMode } from '@/lib/travel'
 import { CityOption } from '@/lib/utils'
 
-const HistoryPage = () => {
+const HistoryView = () => {
   const { user, loading: authLoading } = useAuth()
   const {
     locationData,
@@ -33,8 +33,11 @@ const HistoryPage = () => {
   } = useLocations()
   const router = useRouter()
 
-  // User card ids that are currently expanded (empty = all collapsed).
-  const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  // User cards that are expanded live in the URL (?open=id1,id2), so a
+  // refresh, a link or coming back from another page keeps them open.
+  const searchParams = useSearchParams()
+  const pathname = usePathname()
+  const expanded = new Set(searchParams.get('open')?.split(',').filter(Boolean))
   // Location id awaiting delete confirmation (drives the modal), and whether
   // the delete request is in flight.
   const [pendingDelete, setPendingDelete] = useState<string | null>(null)
@@ -73,15 +76,15 @@ const HistoryPage = () => {
   }
 
   const toggleExpanded = (id: string) => {
-    setExpanded((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) {
-        next.delete(id)
-      } else {
-        next.add(id)
-      }
-      return next
-    })
+    const next = new Set(expanded)
+    if (next.has(id)) next.delete(id)
+    else next.add(id)
+    const params = new URLSearchParams(searchParams.toString())
+    if (next.size) params.set('open', [...next].join(','))
+    else params.delete('open')
+    const query = params.toString()
+    // Replace, not push: opening a card isn't a step you'd go Back through.
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false })
   }
 
   const confirmDelete = async () => {
@@ -533,5 +536,18 @@ const HistoryPage = () => {
     </Container>
   )
 }
+
+// Reading the URL needs a Suspense boundary for the production build.
+const HistoryPage = () => (
+  <Suspense
+    fallback={
+      <div className="flex h-screen items-center justify-center">
+        <span className="loading loading-spinner loading-lg"></span>
+      </div>
+    }
+  >
+    <HistoryView />
+  </Suspense>
+)
 
 export default HistoryPage

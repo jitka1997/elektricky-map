@@ -1,5 +1,3 @@
-import { useState } from 'react'
-
 import { Empty } from '@/components/stats/MeStats'
 import PlaceBars from '@/components/stats/PlaceBars'
 import UserIcon from '@/components/UserIcon'
@@ -22,6 +20,9 @@ type Props = {
   from: number
   now: number
   periodText: string
+  // The friend picked in the ranking (null = the default pick).
+  withId: string | null
+  onWithChange: (id: string) => void
 }
 
 const TogetherStats = ({
@@ -31,8 +32,9 @@ const TogetherStats = ({
   from,
   now,
   periodText,
+  withId,
+  onWithChange,
 }: Props) => {
-  const [friendId, setFriendId] = useState<string | null>(null)
   const viewer = people.find((p) => p.id === viewerId)!
   const who = (p: StatsPerson) => (p.id === meId ? 'You' : p.name)
 
@@ -51,7 +53,7 @@ const TogetherStats = ({
       ? meId
       : ranking[0].person.id
   const selected =
-    ranking.find((r) => r.person.id === friendId) ??
+    ranking.find((r) => r.person.id === withId) ??
     ranking.find((r) => r.person.id === defaultId)!
   // The signed-in user goes first, so the pair reads from their side.
   const [a, b] =
@@ -80,7 +82,7 @@ const TogetherStats = ({
                 key={person.id}
                 type="button"
                 aria-pressed={person.id === selected.person.id}
-                onClick={() => setFriendId(person.id)}
+                onClick={() => onWithChange(person.id)}
                 className={`rounded-field grid grid-cols-[1.25rem_2rem_minmax(0,1fr)_5.5rem] items-center gap-3 border px-3 py-2 text-left ${
                   person.id === selected.person.id
                     ? 'border-base-300 bg-base-100'
