@@ -35,8 +35,7 @@ const LocationSelect: React.FC = () => {
   // Bumped after a successful submit to remount CitySearch and clear its input.
   const [resetKey, setResetKey] = useState(0)
   const { user } = useAuth()
-  const { addLocation, locationData, requestFlyToMyLocation, now } =
-    useLocations()
+  const { locationData, requestFlyToMyLocation, now } = useLocations()
 
   // The time this entry would be logged at (now, unless changed).
   const logTime = customTime ? new Date(dateTime).getTime() : now
@@ -104,17 +103,11 @@ const LocationSelect: React.FC = () => {
         },
       })
 
-      // Friends in that city get a notification (for now or planned entries).
+      // Električky in that city get a notification (for now or planned).
+      // The new pin shows up by itself: the live data includes our own
+      // writes straight away.
       notifyNewEntry(id)
       setMeetMessage(friendsThereMessage(selectedCity, when))
-
-      // Optimistically add to local state so the pin/entry appears instantly
-      // without refetching everything. Use a local Date for display.
-      addLocation(
-        user.uid,
-        { ...newLocation, id, createdAt: when ?? new Date() },
-        { userName: user.displayName, photoURL: user.photoURL }
-      )
 
       setSelectedCity(null)
       setTravelMode(DEFAULT_TRAVEL_MODE)

@@ -17,11 +17,7 @@ const MAX_NAME_LENGTH = 30
 
 const ProfilePage = () => {
   const { user, loading } = useAuth()
-  const {
-    locationData,
-    isLoading: locationsLoading,
-    updateUserLocally,
-  } = useLocations()
+  const { locationData, isLoading: locationsLoading } = useLocations()
   const router = useRouter()
   const fileInput = useRef<HTMLInputElement>(null)
 
@@ -82,12 +78,6 @@ const ProfilePage = () => {
         userId: user.uid,
         customName: newName,
         customPhoto: photo,
-      })
-      updateUserLocally(user.uid, {
-        customName: newName,
-        customPhoto: photo,
-        userName: newName || user.displayName,
-        photoURL: photo || user.photoURL,
       })
       setNameEdit(undefined)
       setPhotoEdit(undefined)

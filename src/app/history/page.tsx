@@ -25,14 +25,7 @@ import { CityOption } from '@/lib/utils'
 
 const HistoryView = () => {
   const { user, loading: authLoading } = useAuth()
-  const {
-    locationData,
-    isLoading: locationsLoading,
-    removeLocation,
-    updateLocation,
-    addLocation,
-    now,
-  } = useLocations()
+  const { locationData, isLoading: locationsLoading, now } = useLocations()
   const router = useRouter()
 
   // User cards that are expanded live in the URL (?open=id1,id2), so a
@@ -97,7 +90,6 @@ const HistoryView = () => {
         userId: user.uid,
         locationId: pendingDelete,
       })
-      removeLocation(user.uid, pendingDelete)
       setPendingDelete(null)
     } catch {
       window.alert('Failed to delete location. Please try again.')
@@ -139,13 +131,8 @@ const HistoryView = () => {
         userId: user.uid,
         locationData: { ...base, createdAt: when },
       })
-      // Friends in that city hear about it if it's for now or planned.
+      // Električky in that city hear about it if it's for now or planned.
       notifyNewEntry(id)
-      addLocation(
-        user.uid,
-        { ...base, id, createdAt: when },
-        { userName: user.displayName, photoURL: user.photoURL }
-      )
       closeAdd()
     } catch {
       window.alert('Failed to add location. Please try again.')
@@ -236,7 +223,6 @@ const HistoryView = () => {
         locationId: editingLocation.id,
         locationData: changes,
       })
-      updateLocation(user.uid, editingLocation.id, changes)
       closeEdit()
     } catch {
       window.alert('Failed to update location. Please try again.')
