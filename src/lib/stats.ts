@@ -101,6 +101,46 @@ const addTo = <T extends { place: Place; value: number }>(
 
 export type PlaceTotal = { place: Place; value: number }
 
+const startOfDay = (t: number) => {
+  const d = new Date(t)
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
+}
+
+/**
+ * How many calendar days (in this device's time zone) these periods touch.
+ * A day counts if any part of it is covered, so the day you travel counts
+ * for both cities, and a few hours somewhere count as a day there.
+ */
+export const calendarDays = (periods: { start: number; end: number }[]) => {
+  const days = new Set<number>()
+  for (const { start, end } of periods) {
+    if (end <= start) continue
+    const last = startOfDay(end - 1)
+    for (
+      const d = new Date(startOfDay(start));
+      d.getTime() <= last;
+      d.setDate(d.getDate() + 1)
+    )
+      days.add(d.getTime())
+  }
+  return days.size
+}
+
+/** Days per place (each place's own days; a travel day counts for both). */
+const daysByPlace = (
+  periods: { place: Place; start: number; end: number }[]
+) => {
+  const byPlace = new Map<string, { place: Place; periods: typeof periods }>()
+  for (const p of periods) {
+    const item = byPlace.get(p.place.key)
+    if (item) item.periods.push(p)
+    else byPlace.set(p.place.key, { place: p.place, periods: [p] })
+  }
+  return [...byPlace.values()]
+    .map(({ place, periods }) => ({ place, value: calendarDays(periods) }))
+    .sort((a, b) => b.value - a.value)
+}
+
 const sortedTotals = (map: Map<string, PlaceTotal>) =>
   [...map.values()].sort((a, b) => b.value - a.value)
 
@@ -131,8 +171,8 @@ export const personStats = (
   const home = homeOf(stays, from, to)
   const inPeriod = clip(stays, from, to)
 
-  const time = new Map<string, PlaceTotal>()
-  for (const s of inPeriod) addTo(time, s.place, s.end - s.start)
+  // Days in each place.
+  const time = daysByPlace(inPeriod)
 
   // Arriving somewhere new; a repeated entry in the same city isn't a visit.
   const visits = new Map<string, PlaceTotal>()
@@ -153,14 +193,15 @@ export const personStats = (
     }
   })
 
-  const places = [...time.values()].map((t) => t.place)
+  const places = time.map((t) => t.place)
   const countries = new Set(places.map((p) => p.country.toLowerCase()))
   const km = legs.reduce((n, l) => n + l.km, 0)
-  const away = inPeriod
-    .filter((s) => s.place.key !== home?.key)
-    .reduce((n, s) => n + s.end - s.start, 0)
-  // Measured from the first entry if the person started within the period.
-  const tracked = to - Math.max(from, entries[0]?.time ?? from)
+  // Days with any time away from home.
+  const away = calendarDays(inPeriod.filter((s) => s.place.key !== home?.key))
+  // Days in the period, from the first entry if the person started within it.
+  const tracked = calendarDays([
+    { start: Math.max(from, entries[0]?.time ?? from), end: to },
+  ])
   const entryCount = entries.filter(
     (e) => e.time >= from && e.time <= to
   ).length
@@ -177,7 +218,13 @@ export const personStats = (
     : undefined
 
   // The stays of a trip away from home, in order (`places` without repeats).
-  type AwayRun = { start: number; end: number; places: Place[]; stays: Stay[] }
+  type AwayRun = {
+    start: number
+    end: number
+    days: number
+    places: Place[]
+    stays: Stay[]
+  }
   let run: AwayRun | null = null
   let longestAway = null as AwayRun | null
   for (const s of inPeriod) {
@@ -185,13 +232,17 @@ export const personStats = (
       run = null
       continue
     }
-    if (!run) run = { start: s.start, end: s.end, places: [], stays: [] }
+    if (!run)
+      run = { start: s.start, end: s.end, days: 0, places: [], stays: [] }
     run.end = s.end
+    run.days = calendarDays([run])
     run.stays.push(s)
     if (!run.places.some((p) => p.key === s.place.key)) run.places.push(s.place)
     if (
       !longestAway ||
-      run.end - run.start > longestAway.end - longestAway.start
+      run.days > longestAway.days ||
+      (run.days === longestAway.days &&
+        run.end - run.start > longestAway.end - longestAway.start)
     )
       longestAway = { ...run, places: [...run.places], stays: [...run.stays] }
   }
@@ -223,7 +274,7 @@ export const personStats = (
 
   return {
     home,
-    time: sortedTotals(time),
+    time,
     visits: sortedTotals(visits),
     legs,
     placeCount: places.length,
@@ -274,18 +325,21 @@ export const together = (a: Stay[], b: Stay[], from: number, to: number) => {
     else merged.push({ ...o })
   }
 
-  const byPlace = new Map<string, PlaceTotal>()
-  for (const o of merged) addTo(byPlace, o.place, o.end - o.start)
+  // The longest stretch: most days, then most hours.
+  const longest = merged.reduce<Overlap | null>((m, o) => {
+    if (!m) return o
+    const diff = calendarDays([o]) - calendarDays([m])
+    return diff > 0 || (diff === 0 && o.end - o.start > m.end - m.start) ? o : m
+  }, null)
 
   return {
     overlaps: merged,
-    total: merged.reduce((n, o) => n + o.end - o.start, 0),
-    byPlace: sortedTotals(byPlace),
+    // Days you were in the same city at some point.
+    total: calendarDays(merged),
+    byPlace: daysByPlace(merged),
     last: merged[merged.length - 1] as Overlap | undefined,
-    longest: merged.reduce<Overlap | null>(
-      (m, o) => (!m || o.end - o.start > m.end - m.start ? o : m),
-      null
-    ),
+    longest,
+    longestDays: longest ? calendarDays([longest]) : 0,
   }
 }
 
@@ -312,11 +366,8 @@ export const formatRange = (start: number, end: number) => {
   return `${a.getDate()}–${formatDay(end)}`
 }
 
-/** "5 h" under a day, otherwise whole days. */
-export const formatDuration = (ms: number) => {
-  if (ms < DAY) return `${Math.max(1, Math.round(ms / 3_600_000))} h`
-  return plural(Math.round(ms / DAY), 'day')
-}
+/** A number of calendar days, e.g. "1 day", "12 days". */
+export const formatDays = (days: number) => plural(days, 'day')
 
 export const formatKm = (km: number) =>
   `${Math.round(km).toLocaleString('en-GB')} km`

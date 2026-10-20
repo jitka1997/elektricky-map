@@ -3,7 +3,7 @@ import PlaceBars from '@/components/stats/PlaceBars'
 import UserIcon from '@/components/UserIcon'
 import {
   daysAgo,
-  formatDuration,
+  formatDays,
   formatRange,
   homeOf,
   placeColor,
@@ -110,7 +110,7 @@ const TogetherStats = ({
                   </span>
                 </span>
                 <span className="text-right text-sm font-semibold tabular-nums">
-                  {tg.total ? formatDuration(tg.total) : '—'}
+                  {tg.total ? formatDays(tg.total) : '—'}
                 </span>
               </button>
             ))}
@@ -129,7 +129,7 @@ const TogetherStats = ({
               <h2 className="card-title">{pairTitle}</h2>
             </div>
             <span className="badge">
-              {formatDuration(selected.tg.total)} together
+              {formatDays(selected.tg.total)} together
             </span>
           </div>
           {selected.tg.overlaps.length ? (
@@ -186,7 +186,7 @@ const PairDetails = ({
         />
         <Moment
           label="Longest stretch"
-          value={formatDuration(longest.end - longest.start)}
+          value={formatDays(tg.longestDays)}
           detail={`${longest.place.city} · ${formatRange(longest.start, longest.end)}`}
         />
         <Moment
@@ -205,7 +205,7 @@ const PairDetails = ({
         <p className="text-xs font-semibold tracking-wide uppercase opacity-70">
           Cities together
         </p>
-        <PlaceBars items={tg.byPlace.slice(0, 6)} format={formatDuration} />
+        <PlaceBars items={tg.byPlace.slice(0, 6)} format={formatDays} />
       </div>
     </>
   )

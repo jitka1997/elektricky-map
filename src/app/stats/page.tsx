@@ -149,6 +149,11 @@ const StatsView = () => {
             happened.
           </li>
           <li>
+            Days are calendar days: any time in a city that day counts, so the
+            day you travel counts for both cities, and days together count
+            whenever you were both in the same city.
+          </li>
+          <li>
             Distances are the shortest way between two cities over the
             Earth&apos;s surface, as the crow flies, added up trip by trip.
           </li>

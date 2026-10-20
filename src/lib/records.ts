@@ -1,7 +1,7 @@
 import {
   distanceKm,
   formatDay,
-  formatDuration,
+  formatDays,
   formatKm,
   formatRange,
   type PersonStats,
@@ -44,7 +44,7 @@ export const describeRecord = (
       if (!a) return null
       return {
         label: 'Longest time away',
-        value: formatDuration(a.end - a.start),
+        value: formatDays(a.days),
         detail: `${a.places.map((p) => p.city).join(', ')} · ${formatRange(a.start, a.end)}`,
       }
     }

@@ -6,7 +6,7 @@ import Toggle from '@/components/stats/Toggle'
 import { describeRecord } from '@/lib/records'
 import {
   daysAgo,
-  formatDuration,
+  formatDays,
   formatKm,
   type PersonStats,
   plural,
@@ -47,7 +47,7 @@ const MeStats = ({
   const away = ranked.filter((t) => t.place.key !== st.home?.key)
   const top = away.slice(0, TOP_PLACES)
   const format =
-    rankBy === 'time' ? formatDuration : (v: number) => plural(v, 'visit')
+    rankBy === 'time' ? formatDays : (v: number) => plural(v, 'visit')
 
   const records = RECORDS.flatMap((id) => {
     const text = describeRecord(id, st, periodWord, name)
@@ -69,7 +69,7 @@ const MeStats = ({
         />
         <Headline
           label="Away from home"
-          value={formatDuration(st.away)}
+          value={formatDays(st.away)}
           detail={`${st.tracked ? Math.round((st.away / st.tracked) * 100) : 0}% of the time ${periodWord}`}
         />
         <Headline
