@@ -19,6 +19,7 @@ import {
 import { useLocations } from '@/lib/LocationContext'
 import { isFuture, neighborsAt, sameCity } from '@/lib/locations'
 import { shortName } from '@/lib/names'
+import { placeFields } from '@/lib/places'
 import { notifyNewEntry } from '@/lib/push'
 import { DEFAULT_TRAVEL_MODE, TravelMode } from '@/lib/travel'
 import { CityOption } from '@/lib/utils'
@@ -124,6 +125,7 @@ const HistoryView = () => {
       latitude: addCity.latitude,
       longitude: addCity.longitude,
       travelMode: addMode,
+      ...placeFields(addCity),
     }
     try {
       // Firestore converts a JS Date to a Timestamp on write.
@@ -148,6 +150,8 @@ const HistoryView = () => {
       country: location.country,
       latitude: location.latitude,
       longitude: location.longitude,
+      placeId: location.placeId,
+      countryCode: location.countryCode,
     })
     setEditMode(location.travelMode ?? DEFAULT_TRAVEL_MODE)
     setEditDateTime(toDateTimeLocal(toDate(location.createdAt)))
@@ -215,6 +219,7 @@ const HistoryView = () => {
       latitude: editCity.latitude,
       longitude: editCity.longitude,
       travelMode: editMode,
+      ...placeFields(editCity),
       ...(editTimeChanged ? { createdAt: new Date(editDateTime) } : {}),
     }
     try {

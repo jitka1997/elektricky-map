@@ -5,6 +5,7 @@ import React, { useEffect, useId, useRef, useState } from 'react'
 import { useAuth } from '@/lib/AuthContext'
 import { useLocations } from '@/lib/LocationContext'
 import { pastLocations } from '@/lib/locations'
+import { resolvePlace } from '@/lib/places'
 import {
   CityOption,
   formatCity,
@@ -140,9 +141,15 @@ const CitySearch: React.FC<Props> = ({ value, onSelect }) => {
     setAttempt((n) => n + 1)
   }
 
+  // Picks are saved under the group's name and position for that place, if
+  // anyone logged it before (see resolvePlace).
   const pickSuggestion = (city: CityOption) => {
-    onSelect(city)
-    setQuery(formatCity(city))
+    const saved = resolvePlace(
+      city,
+      locationData.flatMap((u) => u.locations)
+    )
+    onSelect(saved)
+    setQuery(formatCity(saved))
     closeSuggestions()
   }
 

@@ -41,6 +41,9 @@ export type CityOption = {
   kind?: PlaceKind
   countryCode?: string
   osmId?: string // e.g. "R3687140" (R = area/relation, N = point, W = way)
+  // The ID it's saved under (see places.ts), once matched to the group's
+  // places; e.g. "osm:R3687140".
+  placeId?: string
   // For small countries: how far they reach from their centre.
   reachKm?: number
 }
@@ -118,7 +121,12 @@ const featureToCityOption = (feature: PhotonFeature): CityOption | null => {
 }
 
 /** Straight-line distance in km. */
-const kmBetween = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+export const kmBetween = (
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number
+) => {
   const r = Math.PI / 180
   const h =
     Math.sin(((lat2 - lat1) * r) / 2) ** 2 +

@@ -1,15 +1,12 @@
 import { toDate } from '@/lib/dates'
 import type { LocationEntry } from '@/lib/firebase'
+import { samePlace } from '@/lib/places'
 import type { CityOption } from '@/lib/utils'
 
-/** Whether a picked city is the same place as a logged location. */
+/** Whether a picked city is the same place as a logged location (by place
+ * ID, or by name for older entries; see places.ts). */
 export const sameCity = (city: CityOption | null, loc?: LocationEntry) =>
-  !!(
-    city &&
-    loc &&
-    city.city.trim().toLowerCase() === loc.city.trim().toLowerCase() &&
-    city.country.trim().toLowerCase() === loc.country.trim().toLowerCase()
-  )
+  samePlace(city, loc)
 
 /**
  * The entries immediately newer and older than time `t` (ms) in a newest-first

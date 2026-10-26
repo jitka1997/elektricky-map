@@ -93,6 +93,11 @@ export type LocationEntry = {
   // How the user travelled to reach this location. Optional: older entries
   // (logged before this feature) won't have it.
   travelMode?: TravelMode
+  // Which place this is on the map, e.g. "osm:R3687140", and its country
+  // ("GB"). Places are compared by this ID, so a renamed or differently
+  // spelled place still counts as the same one. Older entries don't have it.
+  placeId?: string
+  countryCode?: string
 }
 
 type WriteUserToFirestoreType = {
@@ -148,6 +153,9 @@ type UpdateLocationInFirestoreType = {
     // Only sent when the time was changed (Firestore stores a Date as a
     // Timestamp).
     createdAt?: Date
+    // Only sent when a place was picked (older entries may not have one).
+    placeId?: string
+    countryCode?: string
   }
 }
 
@@ -212,6 +220,8 @@ const toLocationEntry = (snap: QueryDocumentSnapshot): LocationEntry => {
     longitude: data.longitude,
     createdAt: data.createdAt.toDate(),
     travelMode: data.travelMode,
+    placeId: data.placeId,
+    countryCode: data.countryCode,
   }
 }
 

@@ -1,6 +1,7 @@
 import { toDate } from '@/lib/dates'
 import type { LocationEntry } from '@/lib/firebase'
 import { shortName } from '@/lib/names'
+import { placeKeyFor } from '@/lib/places'
 import { DEFAULT_TRAVEL_MODE, TravelMode } from '@/lib/travel'
 import type { LocationData } from '@/lib/types'
 
@@ -34,8 +35,10 @@ export type Leg = {
 /** Time spent in the same city as someone else. */
 export type Overlap = { place: Place; start: number; end: number }
 
-const placeOf = (l: LocationEntry): Place => ({
-  key: `${l.city.trim().toLowerCase()}|${l.country.trim().toLowerCase()}`,
+type PlaceKeyFn = (l: LocationEntry) => string
+
+const placeOf = (l: LocationEntry, keyOf: PlaceKeyFn): Place => ({
+  key: keyOf(l),
   city: l.city.trim(),
   country: l.country.trim(),
   lat: l.latitude,
@@ -54,10 +57,15 @@ export const distanceKm = (a: Place, b: Place) => {
 }
 
 /** A user's entries up to `now` (planned ones left out), oldest first. */
-export const toEntries = (locations: LocationEntry[], now: number): Entry[] =>
+export const toEntries = (
+  locations: LocationEntry[],
+  now: number,
+  // How to tell places apart; by default by each entry's own ID or name.
+  keyOf: PlaceKeyFn = placeKeyFor(locations)
+): Entry[] =>
   locations
     .map((l) => ({
-      place: placeOf(l),
+      place: placeOf(l, keyOf),
       time: toDate(l.createdAt).getTime(),
       mode: l.travelMode ?? DEFAULT_TRAVEL_MODE,
     }))
@@ -425,10 +433,12 @@ export type StatsPerson = {
 export const toPeople = (
   locationData: LocationData[],
   now: number
-): StatsPerson[] =>
-  locationData
+): StatsPerson[] => {
+  // One key function for everyone, so "together" compares the same keys.
+  const keyOf = placeKeyFor(locationData.flatMap((u) => u.locations ?? []))
+  return locationData
     .map((u) => {
-      const entries = toEntries(u.locations ?? [], now)
+      const entries = toEntries(u.locations ?? [], now, keyOf)
       return {
         id: u.userId,
         name: shortName(u.userName, u.customName) || 'Anonymous',
@@ -438,6 +448,7 @@ export const toPeople = (
       }
     })
     .filter((p) => p.entries.length > 0)
+}
 
 export type Period = 'year' | 'all'
 

@@ -12,6 +12,7 @@ import { writeLocationToFirestore } from '@/lib/firebase'
 import { useLocations } from '@/lib/LocationContext'
 import { neighborsAt, pastLocations, sameCity } from '@/lib/locations'
 import { shortName } from '@/lib/names'
+import { placeFields } from '@/lib/places'
 import { notifyNewEntry } from '@/lib/push'
 import { DEFAULT_TRAVEL_MODE, TravelMode } from '@/lib/travel'
 import { CityOption } from '@/lib/utils'
@@ -92,6 +93,7 @@ const LocationSelect: React.FC = () => {
         latitude: selectedCity.latitude,
         longitude: selectedCity.longitude,
         travelMode,
+        ...placeFields(selectedCity),
       }
 
       const id = await writeLocationToFirestore({

@@ -5,6 +5,7 @@ import {
 } from 'firebase-admin/firestore'
 
 import { shortName } from '@/lib/names'
+import { samePlace } from '@/lib/places'
 import {
   adminDb,
   authenticate,
@@ -15,8 +16,12 @@ import { sendToUsers } from '@/lib/server/push'
 
 const HOUR = 60 * 60 * 1000
 
-const cityKey = (loc: DocumentData) =>
-  `${String(loc.city).trim().toLowerCase()}|${String(loc.country).trim().toLowerCase()}`
+// The same place, by ID (or by name for entries from before IDs).
+const sameAs = (a: DocumentData, b: DocumentData) =>
+  samePlace(
+    { city: String(a.city), country: String(a.country), placeId: a.placeId },
+    { city: String(b.city), country: String(b.country), placeId: b.placeId }
+  )
 
 const validTimeZone = (tz: unknown) => {
   if (typeof tz !== 'string') return 'UTC'
@@ -88,7 +93,7 @@ async function notifyArrival(request: Request) {
           .limit(1)
           .get()
         const current = latest.docs[0]?.data()
-        if (current && cityKey(current) === cityKey(loc)) recipients.push(u.id)
+        if (current && sameAs(current, loc)) recipients.push(u.id)
       })
   )
   if (!recipients.length) return Response.json({ sent: 0 })
