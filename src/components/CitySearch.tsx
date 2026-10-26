@@ -2,10 +2,16 @@
 
 import React, { useEffect, useId, useRef, useState } from 'react'
 
+import { useAuth } from '@/lib/AuthContext'
+import { useLocations } from '@/lib/LocationContext'
+import { pastLocations } from '@/lib/locations'
 import {
   CityOption,
-  cityOptionFromCoords,
   formatCity,
+  NEARBY_RADIUS_KM,
+  nearbyCities,
+  NearbyCity,
+  normalizeName,
   searchCities,
 } from '@/lib/utils'
 
@@ -41,9 +47,17 @@ const CitySearch: React.FC<Props> = ({ value, onSelect }) => {
   >(null)
   const isLocating = locating !== null
   const [error, setError] = useState<string | null>(null)
+  // After "Use my current location": the place picked for you, the other
+  // places nearby ("Not right?"), and how rough the position was.
+  const [located, setLocated] = useState<{
+    picked: NearbyCity
+    others: NearbyCity[]
+    roughKm: number | null
+  } | null>(null)
   // Index of the keyboard-highlighted suggestion (-1 = none).
   const [activeIndex, setActiveIndex] = useState(-1)
 
+  const inputRef = useRef<HTMLInputElement>(null)
   const listId = useId()
   const optionId = (i: number) => `${listId}-opt-${i}`
 
@@ -53,6 +67,28 @@ const CitySearch: React.FC<Props> = ({ value, onSelect }) => {
   useEffect(() => {
     valueRef.current = value
   }, [value])
+
+  // Where you last logged: typed searches rank places near it higher.
+  const { user } = useAuth()
+  const { locationData, now } = useLocations()
+  const lastHere = pastLocations(
+    locationData.find((u) => u.userId === user?.uid)?.locations ?? [],
+    now
+  )[0]
+  const nearLat = lastHere?.latitude
+  const nearLon = lastHere?.longitude
+
+  // Places anyone in the group has logged; they win close calls when
+  // guessing where you are, so everyone ends up using the same place.
+  const groupPlaces = new Set(
+    locationData.flatMap((u) =>
+      u.locations.map(
+        (l) => `${normalizeName(l.city)}|${normalizeName(l.country)}`
+      )
+    )
+  )
+  const inGroup = (c: CityOption) =>
+    groupPlaces.has(`${normalizeName(c.city)}|${normalizeName(c.country)}`)
 
   // Nothing to search for, or the box already shows the selected city.
   const q = query.trim()
@@ -72,7 +108,13 @@ const CitySearch: React.FC<Props> = ({ value, onSelect }) => {
       let cities: CityOption[] = []
       let failed = false
       try {
-        cities = await searchCities(q, { limit: 6 })
+        cities = await searchCities(q, {
+          limit: 6,
+          near:
+            nearLat !== undefined && nearLon !== undefined
+              ? { latitude: nearLat, longitude: nearLon }
+              : null,
+        })
       } catch {
         failed = true
       }
@@ -86,7 +128,7 @@ const CitySearch: React.FC<Props> = ({ value, onSelect }) => {
       clearTimeout(timer)
       clearTimeout(slowTimer)
     }
-  }, [q, searchable, attempt])
+  }, [q, searchable, attempt, nearLat, nearLon])
 
   const closeSuggestions = () => {
     setResults({ query: q, cities: [], failed: false })
@@ -129,23 +171,35 @@ const CitySearch: React.FC<Props> = ({ value, onSelect }) => {
         }
       )
 
-      const { latitude, longitude } = position.coords
+      const { latitude, longitude, accuracy } = position.coords
       setLocating('city')
       slowTimer = setTimeout(() => setLocating('city-slow'), 4000)
-      const city = await cityOptionFromCoords(latitude, longitude)
-      if (!city) {
-        throw new Error('Could not determine your city')
+      const [picked, ...others] = await nearbyCities(latitude, longitude, {
+        prefer: inGroup,
+      })
+      if (!picked) {
+        throw new Error(
+          `There's no town or village within ${NEARBY_RADIUS_KM} km of you. Type the nearest one instead.`
+        )
       }
 
-      pickSuggestion(city)
+      pickSuggestion(picked)
+      setLocated({
+        picked,
+        others: others.slice(0, 3),
+        // Computers often only know their position from Wi-Fi, to a few km.
+        roughKm: accuracy > 2000 ? Math.round(accuracy / 1000) : null,
+      })
     } catch (err) {
       // A timed-out lookup is a TimeoutError in Chrome but an AbortError
-      // ("Fetch is aborted") in Safari.
-      const timedOut =
-        err instanceof Error &&
-        (err.name === 'TimeoutError' || err.name === 'AbortError')
+      // ("Fetch is aborted") in Safari; no connection at all is a TypeError
+      // ("Failed to fetch" / "Load failed").
+      const unreachable =
+        err instanceof TypeError ||
+        (err instanceof Error &&
+          (err.name === 'TimeoutError' || err.name === 'AbortError'))
       setError(
-        timedOut
+        unreachable
           ? "City search isn't answering right now. It's a free service that's sometimes down. Please try again in a moment."
           : err instanceof Error
             ? err.message
@@ -157,8 +211,28 @@ const CitySearch: React.FC<Props> = ({ value, onSelect }) => {
     }
   }
 
+  // "Not right?": switch to another nearby place.
+  const pickNearby = (city: NearbyCity) => {
+    if (!located) return
+    pickSuggestion(city)
+    setLocated({
+      ...located,
+      picked: city,
+      others: [located.picked, ...located.others.filter((c) => c !== city)]
+        // Keep them in order of distance.
+        .sort((a, b) => a.distanceKm - b.distanceKm),
+    })
+  }
+
+  // "Not right? Type it instead": empty the box, ready to type.
+  const typeInstead = () => {
+    clearInput()
+    inputRef.current?.focus()
+  }
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setError(null)
+    setLocated(null)
     setQuery(e.target.value)
     setActiveIndex(-1)
     // Editing the text invalidates any previously selected city.
@@ -166,6 +240,7 @@ const CitySearch: React.FC<Props> = ({ value, onSelect }) => {
   }
 
   const clearInput = () => {
+    setLocated(null)
     setQuery('')
     closeSuggestions()
     onSelect(null)
@@ -186,6 +261,7 @@ const CitySearch: React.FC<Props> = ({ value, onSelect }) => {
       case 'Enter':
         if (activeIndex >= 0 && activeIndex < suggestions.length) {
           e.preventDefault()
+          setLocated(null)
           pickSuggestion(suggestions[activeIndex])
         }
         break
@@ -242,6 +318,7 @@ const CitySearch: React.FC<Props> = ({ value, onSelect }) => {
 
       <div className="relative w-full">
         <input
+          ref={inputRef}
           // "search" + autocomplete off: stops Chrome offering saved
           // addresses for a field it guesses is an address ("city").
           type="search"
@@ -294,7 +371,10 @@ const CitySearch: React.FC<Props> = ({ value, onSelect }) => {
                   aria-selected={index === activeIndex}
                   onMouseEnter={() => setActiveIndex(index)}
                   onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => pickSuggestion(city)}
+                  onClick={() => {
+                    setLocated(null)
+                    pickSuggestion(city)
+                  }}
                   className={index === activeIndex ? 'bg-base-300' : ''}
                 >
                   {formatCity(city)}
@@ -305,6 +385,41 @@ const CitySearch: React.FC<Props> = ({ value, onSelect }) => {
         )}
       </div>
 
+      {located && value && (
+        <div className="mt-1 flex flex-col gap-1 text-sm">
+          <span className="opacity-70">
+            {located.picked.distanceKm < 1
+              ? "You're right there"
+              : `Its centre is ${located.picked.distanceKm.toFixed(1)} km away`}
+            {located.roughKm &&
+              ` · your position is only accurate to about ${located.roughKm} km, so check it`}
+          </span>
+          {/* Always a way out, even when nothing else is nearby. */}
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="opacity-70">Not right?</span>
+            {located.others.map((city) => (
+              <button
+                key={`${city.city}-${city.latitude}`}
+                type="button"
+                onClick={() => pickNearby(city)}
+                className="btn btn-outline btn-xs font-normal"
+              >
+                {city.city}
+                <span className="opacity-60">
+                  {city.distanceKm.toFixed(1)} km
+                </span>
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={typeInstead}
+              className="link text-base-content"
+            >
+              Type it instead
+            </button>
+          </div>
+        </div>
+      )}
       {(isSlow || locating === 'city-slow') && (
         <div className="mt-1 text-sm opacity-70">
           City search is slow right now. Still looking...
