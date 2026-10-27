@@ -16,7 +16,12 @@ const SETTLEMENT_TAGS = [
   'place:hamlet',
 ]
 const COUNTRY_TAGS = ['place:country']
-const PLACE_TAGS = [...SETTLEMENT_TAGS, ...COUNTRY_TAGS]
+// A city can be on the map only as a region: Tokyo is the prefecture "Tokyo
+// Metropolis" (a province), and its wards are cities inside it. A region
+// counts when Photon itself ranks it as a city; real states and provinces
+// (Bavaria, Bali) don't.
+const REGION_TAGS = ['place:state', 'place:province']
+const PLACE_TAGS = [...SETTLEMENT_TAGS, ...COUNTRY_TAGS, ...REGION_TAGS]
 
 // A country no more than this across is one place, like a city: Vatican City
 // (1 km), Gibraltar, San Marino (11), Liechtenstein (25), Monaco (26),
@@ -46,6 +51,10 @@ export type CityOption = {
   placeId?: string
   // For small countries: how far they reach from their centre.
   reachKm?: number
+  // A city that's only on the map as a region (Tokyo, see REGION_TAGS).
+  region?: boolean
+  // For a district of a bigger city (Shinjuku in Tokyo): that city.
+  partOf?: string
 }
 
 /** A place near the user, with how far its centre is from them. */
@@ -55,6 +64,8 @@ type PhotonFeature = {
   geometry?: { coordinates?: [number, number] }
   properties?: {
     name?: string
+    // For a district: the city it's part of.
+    city?: string
     state?: string
     county?: string
     country?: string
@@ -63,15 +74,18 @@ type PhotonFeature = {
     osm_id?: number
     osm_key?: string
     osm_value?: string
+    // Photon's own rank for it: "city", "district", "state"…
+    type?: string
     // Bounding box: [west, north, east, south].
     extent?: [number, number, number, number]
   }
 }
 
-/** "Bratislava, Slovakia"; a small country is just "San Marino". */
+/** "Bratislava, Slovakia"; a district "Shinjuku, Tokyo, Japan"; a small
+ * country is just "San Marino", and Vienna (a state too) "Vienna, Austria". */
 export const formatCity = (city: CityOption): string =>
-  [city.city, city.state, city.country !== city.city ? city.country : null]
-    .filter(Boolean)
+  [city.city, city.partOf, city.state, city.country]
+    .filter((part, i, parts) => part && parts.indexOf(part) === i)
     .join(', ')
 
 const KINDS: PlaceKind[] = ['city', 'town', 'village', 'hamlet']
@@ -84,9 +98,14 @@ const featureToCityOption = (feature: PhotonFeature): CityOption | null => {
   if (!props?.name || !coords) return null
 
   const countryCode = props.countrycode?.toUpperCase()
+  const region = props.osm_value === 'state' || props.osm_value === 'province'
   let kind: PlaceKind
   let reachKm: number | undefined
-  if (props.osm_value === 'country') {
+  if (region) {
+    // Only a region that's really a city (see REGION_TAGS).
+    if (props.type !== 'city') return null
+    kind = 'city'
+  } else if (props.osm_value === 'country') {
     // Only countries small enough to be one place; we need their size.
     if (!props.extent) return null
     const [west, north, east, south] = props.extent
@@ -117,6 +136,11 @@ const featureToCityOption = (feature: PhotonFeature): CityOption | null => {
         ? `${props.osm_type}${props.osm_id}`
         : undefined,
     reachKm,
+    region: region || undefined,
+    partOf:
+      props.type === 'district' && props.city !== props.name
+        ? props.city
+        : undefined,
   }
 }
 
@@ -229,8 +253,8 @@ export const searchCities = async (
   if (!q) return []
   const limit = opts?.limit ?? 6
 
-  // Ask for a few extra: countries and duplicates get dropped.
-  const params = new URLSearchParams({ q, limit: String(limit + 4) })
+  // Ask for a few extra: countries, regions and duplicates get dropped.
+  const params = new URLSearchParams({ q, limit: String(limit + 6) })
   if (opts?.near) {
     params.set('lat', String(opts.near.latitude))
     params.set('lon', String(opts.near.longitude))
@@ -254,8 +278,9 @@ export const NEARBY_RADIUS_KM = 25
  * The places around a position, most likely first: by distance relative to
  * their size, preferring the country you're actually in (a town across a
  * border is less likely; a small country you're inside, like San Marino, is
- * the place). Places for which `prefer` is true (e.g. ones the group already
- * uses) win close calls. Empty if there's nothing within NEARBY_RADIUS_KM.
+ * the place, and so is Tokyo among its wards). Places for which `prefer` is
+ * true (e.g. ones the group already uses) win close calls. Empty if there's
+ * nothing within NEARBY_RADIUS_KM.
  */
 export const nearbyCities = async (
   latitude: number,
@@ -269,24 +294,45 @@ export const nearbyCities = async (
       limit: String(limit),
       radius: String(NEARBY_RADIUS_KM),
     })
-  const [settlements, smallCountries, hereCountry] = await Promise.all([
+  const [settlements, wholePlaces, hereCountry] = await Promise.all([
     fetchPlaces('reverse', around(15), SETTLEMENT_TAGS),
     // Asked for separately: in San Marino or Andorra, dozens of mapped
     // hamlets are closer than the country's centre and would crowd it out.
-    // Only a small country's centre can be this close, and bigger ones are
+    // Only the centre of a small country or of a city mapped as a region
+    // (Tokyo) can be this close; bigger countries and real regions are
     // dropped anyway.
-    fetchPlaces('reverse', around(2), COUNTRY_TAGS).catch(() => []),
+    fetchPlaces('reverse', around(3), [...COUNTRY_TAGS, ...REGION_TAGS]).catch(
+      () => []
+    ),
     // Which country you're standing in: the nearest mapped thing of any kind
     // (a building, a road…). Only a hint, so if it fails we do without.
     fetchFeatures('reverse', around(1), [])
       .then((f) => f[0]?.properties?.countrycode?.toUpperCase())
       .catch(() => undefined),
   ])
-  const places = [...smallCountries, ...settlements]
+  const nearby = dropDuplicates([...wholePlaces, ...settlements])
+    .map((c) => ({
+      ...c,
+      distanceKm: kmBetween(latitude, longitude, c.latitude, c.longitude),
+    }))
+    .filter((c) => c.distanceKm <= NEARBY_RADIUS_KM)
+
+  // The nearest city on the map. If it's a district of a city that's only
+  // mapped as a region (a ward of Tokyo), you're in that city.
+  const nearestCity = nearby
+    .filter((c) => c.kind === 'city' && !c.region)
+    .sort((a, b) => a.distanceKm - b.distanceKm)[0]
+  const inRegionCity = (c: NearbyCity) =>
+    !!c.region &&
+    !!nearestCity?.partOf &&
+    normalizeName(nearestCity.partOf) === normalizeName(c.city) &&
+    nearestCity.countryCode === c.countryCode
 
   const score = (c: NearbyCity) => {
-    // Inside a country that's small enough to be one place: that's it.
+    // Inside a country that's small enough to be one place, or among the
+    // wards of Tokyo: that's it.
     if (c.kind === 'country' && c.countryCode === hereCountry) return 0
+    if (inRegionCity(c)) return 0
     const reach =
       c.kind === 'country' ? (c.reachKm ?? 1) : REACH_KM[c.kind ?? 'village']
     return (
@@ -296,11 +342,5 @@ export const nearbyCities = async (
     )
   }
 
-  return dropDuplicates(places)
-    .map((c) => ({
-      ...c,
-      distanceKm: kmBetween(latitude, longitude, c.latitude, c.longitude),
-    }))
-    .filter((c) => c.distanceKm <= NEARBY_RADIUS_KM)
-    .sort((a, b) => score(a) - score(b))
+  return nearby.sort((a, b) => score(a) - score(b))
 }
