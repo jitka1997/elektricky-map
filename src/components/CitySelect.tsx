@@ -8,17 +8,25 @@ import Container from '@/components/Container'
 import TravelModePicker from '@/components/TravelModePicker'
 import { useAuth } from '@/lib/AuthContext'
 import { toDateTimeLocal } from '@/lib/dates'
-import { writeLocationToFirestore } from '@/lib/firebase'
+import {
+  updateLocationInFirestore,
+  writeLocationToFirestore,
+} from '@/lib/firebase'
 import { useLocations } from '@/lib/LocationContext'
 import { neighborsAt, pastLocations, sameCity } from '@/lib/locations'
 import { shortName } from '@/lib/names'
 import { placeFields } from '@/lib/places'
 import { notifyNewEntry } from '@/lib/push'
+import { type Here, SPOT_ACCURACY_M, toSpot } from '@/lib/spot'
 import { DEFAULT_TRAVEL_MODE, TravelMode } from '@/lib/travel'
 import { CityOption } from '@/lib/utils'
 
 const LocationSelect: React.FC = () => {
   const [selectedCity, setSelectedCity] = useState<CityOption | null>(null)
+  // Your GPS reading, when the city came from "Use my current location", and
+  // whether this entry's pin shows that exact spot (off for every new entry).
+  const [here, setHere] = useState<Here | null>(null)
+  const [shareSpot, setShareSpot] = useState(false)
   const [travelMode, setTravelMode] = useState<TravelMode>(DEFAULT_TRAVEL_MODE)
   // Logs default to "now"; the user can opt in to a custom date/time.
   const [customTime, setCustomTime] = useState(false)
@@ -45,11 +53,26 @@ const LocationSelect: React.FC = () => {
   // before or after the log time.
   const myLocations =
     locationData.find((u) => u.userId === user?.uid)?.locations ?? []
-  const isAdjacentSame = (() => {
-    if (!selectedCity || isNaN(logTime)) return false
-    const { newer, older } = neighborsAt(myLocations, logTime)
-    return sameCity(selectedCity, newer) || sameCity(selectedCity, older)
-  })()
+  const neighbors =
+    selectedCity && !isNaN(logTime) ? neighborsAt(myLocations, logTime) : null
+  const isAdjacentSame =
+    !!neighbors &&
+    (sameCity(selectedCity, neighbors.newer) ||
+      sameCity(selectedCity, neighbors.older))
+
+  // Your exact spot: offered for an entry for now made with your location,
+  // and possible when the position is precise.
+  const spotOffered = !!here && !customTime
+  const spotPrecise = !!here && here.accuracy <= SPOT_ACCURACY_M
+  const withSpot = spotOffered && spotPrecise && shareSpot
+  // Already in that city: the exact spot moves your current pin instead of
+  // logging the city again.
+  const movesPin = withSpot && sameCity(selectedCity, neighbors?.older)
+  const roughness = !here
+    ? ''
+    : here.accuracy < 1000
+      ? `${Math.round(here.accuracy)} m`
+      : `${Math.round(here.accuracy / 1000)} km`
 
   // "Bára is in Vienna too!" when friends' latest entry is that city.
   const friendsThereMessage = (city: CityOption, when: Date | null) => {
@@ -82,36 +105,52 @@ const LocationSelect: React.FC = () => {
       setIsUploading(true)
       if (!user) throw new Error('User not authenticated')
       if (!selectedCity) throw new Error('No city selected')
-      if (isAdjacentSame) throw new Error('Same as an adjacent entry')
+      if (isAdjacentSame && !movesPin)
+        throw new Error('Same as an adjacent entry')
       if (isNaN(logTime)) throw new Error('Invalid date/time')
       const when = customTime ? new Date(dateTime) : null
+      const spot = withSpot && here ? toSpot(here) : null
 
-      const newLocation = {
-        userId: user.uid,
-        city: selectedCity.city,
-        country: selectedCity.country,
-        latitude: selectedCity.latitude,
-        longitude: selectedCity.longitude,
-        travelMode,
-        ...placeFields(selectedCity),
+      if (movesPin) {
+        // Already there: only the pin moves, so nobody gets notified.
+        const currentId = neighbors?.older?.id
+        if (!currentId || !spot) throw new Error('Nothing to move')
+        await updateLocationInFirestore({
+          userId: user.uid,
+          locationId: currentId,
+          locationData: { spot },
+        })
+      } else {
+        const newLocation = {
+          userId: user.uid,
+          city: selectedCity.city,
+          country: selectedCity.country,
+          latitude: selectedCity.latitude,
+          longitude: selectedCity.longitude,
+          travelMode,
+          ...placeFields(selectedCity),
+          ...(spot && { spot }),
+        }
+
+        const id = await writeLocationToFirestore({
+          userId: user.uid,
+          locationData: {
+            ...newLocation,
+            // Server time for "now"; Firestore converts a custom Date itself.
+            createdAt: when ?? (serverTimestamp() as unknown as Timestamp),
+          },
+        })
+
+        // Električky in that city get a notification (for now or planned).
+        // The new pin shows up by itself: the live data includes our own
+        // writes straight away.
+        notifyNewEntry(id)
+        setMeetMessage(friendsThereMessage(selectedCity, when))
       }
 
-      const id = await writeLocationToFirestore({
-        userId: user.uid,
-        locationData: {
-          ...newLocation,
-          // Server time for "now"; Firestore converts a custom Date itself.
-          createdAt: when ?? (serverTimestamp() as unknown as Timestamp),
-        },
-      })
-
-      // Električky in that city get a notification (for now or planned).
-      // The new pin shows up by itself: the live data includes our own
-      // writes straight away.
-      notifyNewEntry(id)
-      setMeetMessage(friendsThereMessage(selectedCity, when))
-
       setSelectedCity(null)
+      setHere(null)
+      setShareSpot(false)
       setTravelMode(DEFAULT_TRAVEL_MODE)
       setCustomTime(false)
       setResetKey((k) => k + 1)
@@ -133,19 +172,49 @@ const LocationSelect: React.FC = () => {
             <CitySearch
               key={resetKey}
               value={selectedCity}
-              onSelect={setSelectedCity}
+              onSelect={(city, gps) => {
+                setSelectedCity(city)
+                setHere(gps ?? null)
+              }}
             />
           </div>
           <button
             onClick={submitLocationToFirestore}
             disabled={
-              !selectedCity || isUploading || isAdjacentSame || isNaN(logTime)
+              !selectedCity ||
+              isUploading ||
+              (isAdjacentSame && !movesPin) ||
+              isNaN(logTime)
             }
             className="btn btn-primary"
           >
-            {isUploading ? 'Uploading...' : 'Update Location'}
+            {isUploading
+              ? 'Uploading...'
+              : movesPin
+                ? 'Move my pin here'
+                : 'Update Location'}
           </button>
         </div>
+        {spotOffered && (
+          <label className="mt-3 flex w-fit cursor-pointer items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              className="toggle toggle-sm"
+              checked={withSpot}
+              disabled={!spotPrecise}
+              onChange={(e) => setShareSpot(e.target.checked)}
+            />
+            <span>
+              Show my exact spot on the map
+              {!spotPrecise && (
+                <span className="opacity-60">
+                  {' '}
+                  · your position is too rough (±{roughness})
+                </span>
+              )}
+            </span>
+          </label>
+        )}
         <div className="mt-3">
           <TravelModePicker value={travelMode} onChange={setTravelMode} />
         </div>
@@ -184,7 +253,9 @@ const LocationSelect: React.FC = () => {
           <div className="text-base-content/70 mt-2 text-sm">
             {customTime
               ? 'Same as an adjacent entry — pick a different city or time.'
-              : `You're already in ${selectedCity?.city}.`}
+              : movesPin
+                ? `You're already in ${selectedCity?.city}, so this just moves your pin to your exact spot.`
+                : `You're already in ${selectedCity?.city}.`}
           </div>
         )}
       </Container>

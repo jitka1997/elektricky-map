@@ -17,7 +17,7 @@ It's invite-only. Only the five of us can sign in.
 ## What it does
 
 - **Map**: everyone's latest city as a pin with their photo. Friends in the same city are spread around it so no one hides behind someone else.
-- **Log where you are**: search for a city, pick how you got there (🚆 🚌 ✈️ 🚢 🚗 🚶 or the tram), and post it. It's logged for now by default, or for any date and time, so you can add a past trip or plan an upcoming one.
+- **Log where you are**: search for a city or let your location find it, pick how you got there (🚆 🚌 ✈️ 🚢 🚗 🚶 or the tram), and post it. It's logged for now by default, or for any date and time, so you can add a past trip or plan an upcoming one. When you use your location, you can also put your pin on your exact spot instead of the city centre, just for that entry.
 - **Journeys**: play back anyone's travels as an animated trip across the map, with the travel mode for each leg.
 - **History**: every entry for each of us. You can edit, add or delete your own.
 - **Stats**: where you spent your time, how you travel, your records, and who you spend the most time with, down to when and where you were in the same city.

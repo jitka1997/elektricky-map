@@ -6,6 +6,7 @@ import { useAuth } from '@/lib/AuthContext'
 import { useLocations } from '@/lib/LocationContext'
 import { pastLocations } from '@/lib/locations'
 import { resolvePlace } from '@/lib/places'
+import type { Here } from '@/lib/spot'
 import {
   CityOption,
   formatCity,
@@ -18,7 +19,9 @@ import {
 
 interface Props {
   value: CityOption | null
-  onSelect: (city: CityOption | null) => void
+  // `here` is your GPS reading, when the city came from "Use my current
+  // location" (for showing your exact spot).
+  onSelect: (city: CityOption | null, here?: Here) => void
 }
 
 // Maps a GeolocationPositionError code to an actionable message.
@@ -49,10 +52,11 @@ const CitySearch: React.FC<Props> = ({ value, onSelect }) => {
   const isLocating = locating !== null
   const [error, setError] = useState<string | null>(null)
   // After "Use my current location": the place picked for you, the other
-  // places nearby ("Not right?"), and how rough the position was.
+  // places nearby ("Not right?"), the position and how rough it was.
   const [located, setLocated] = useState<{
     picked: NearbyCity
     others: NearbyCity[]
+    here: Here
     roughKm: number | null
   } | null>(null)
   // Index of the keyboard-highlighted suggestion (-1 = none).
@@ -143,12 +147,12 @@ const CitySearch: React.FC<Props> = ({ value, onSelect }) => {
 
   // Picks are saved under the group's name and position for that place, if
   // anyone logged it before (see resolvePlace).
-  const pickSuggestion = (city: CityOption) => {
+  const pickSuggestion = (city: CityOption, here?: Here) => {
     const saved = resolvePlace(
       city,
       locationData.flatMap((u) => u.locations)
     )
-    onSelect(saved)
+    onSelect(saved, here)
     setQuery(formatCity(saved))
     closeSuggestions()
   }
@@ -190,10 +194,12 @@ const CitySearch: React.FC<Props> = ({ value, onSelect }) => {
         )
       }
 
-      pickSuggestion(picked)
+      const here = { latitude, longitude, accuracy }
+      pickSuggestion(picked, here)
       setLocated({
         picked,
         others: others.slice(0, 3),
+        here,
         // Computers often only know their position from Wi-Fi, to a few km.
         roughKm: accuracy > 2000 ? Math.round(accuracy / 1000) : null,
       })
@@ -221,7 +227,7 @@ const CitySearch: React.FC<Props> = ({ value, onSelect }) => {
   // "Not right?": switch to another nearby place.
   const pickNearby = (city: NearbyCity) => {
     if (!located) return
-    pickSuggestion(city)
+    pickSuggestion(city, located.here)
     setLocated({
       ...located,
       picked: city,

@@ -22,6 +22,7 @@ import {
   updateDoc,
 } from 'firebase/firestore'
 
+import type { Spot } from '@/lib/spot'
 import { TravelMode } from '@/lib/travel'
 import type { LocationData } from '@/lib/types'
 
@@ -98,6 +99,9 @@ export type LocationEntry = {
   // spelled place still counts as the same one. Older entries don't have it.
   placeId?: string
   countryCode?: string
+  // Where exactly you were, if you chose to show it (rounded to about 10 m;
+  // see spot.ts). Only the map pin uses it; everything else goes by the city.
+  spot?: Spot
 }
 
 type WriteUserToFirestoreType = {
@@ -144,18 +148,20 @@ const writeLocationToFirestore = async ({
 type UpdateLocationInFirestoreType = {
   userId: string
   locationId: string
+  // Only the fields that change.
   locationData: {
-    city: string
-    country: string
-    latitude: number
-    longitude: number
-    travelMode: TravelMode
-    // Only sent when the time was changed (Firestore stores a Date as a
-    // Timestamp).
+    city?: string
+    country?: string
+    latitude?: number
+    longitude?: number
+    travelMode?: TravelMode
+    // Firestore stores a Date as a Timestamp.
     createdAt?: Date
     // Only sent when a place was picked (older entries may not have one).
     placeId?: string
     countryCode?: string
+    // null removes the exact spot.
+    spot?: Spot | null
   }
 }
 
@@ -166,7 +172,11 @@ const updateLocationInFirestore = async ({
 }: UpdateLocationInFirestoreType) => {
   try {
     const locationRef = doc(db, 'users', userId, 'locations', locationId)
-    await updateDoc(locationRef, locationData)
+    const { spot, ...fields } = locationData
+    await updateDoc(locationRef, {
+      ...fields,
+      ...(spot !== undefined && { spot: spot ?? deleteField() }),
+    })
     console.log(`Location ${locationId} for user ${userId} updated`)
   } catch (error) {
     console.error('Error updating location in Firestore:', error)
@@ -222,6 +232,7 @@ const toLocationEntry = (snap: QueryDocumentSnapshot): LocationEntry => {
     travelMode: data.travelMode,
     placeId: data.placeId,
     countryCode: data.countryCode,
+    spot: data.spot,
   }
 }
 

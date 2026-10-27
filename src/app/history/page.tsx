@@ -22,7 +22,7 @@ import { shortName } from '@/lib/names'
 import { placeFields } from '@/lib/places'
 import { notifyNewEntry } from '@/lib/push'
 import { DEFAULT_TRAVEL_MODE, TravelMode } from '@/lib/travel'
-import { CityOption } from '@/lib/utils'
+import { CityOption, kmBetween, NEARBY_RADIUS_KM } from '@/lib/utils'
 
 const HistoryView = () => {
   const { user, loading: authLoading } = useAuth()
@@ -46,6 +46,8 @@ const HistoryView = () => {
   const [editCity, setEditCity] = useState<CityOption | null>(null)
   const [editMode, setEditMode] = useState<TravelMode>(DEFAULT_TRAVEL_MODE)
   const [editDateTime, setEditDateTime] = useState('')
+  // Whether the entry's exact spot stays (it can be removed when editing).
+  const [editKeepSpot, setEditKeepSpot] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   // Manual add-entry modal: whether it's open, the picked city, the chosen
   // date/time (datetime-local string), and whether the save is in flight.
@@ -155,6 +157,7 @@ const HistoryView = () => {
     })
     setEditMode(location.travelMode ?? DEFAULT_TRAVEL_MODE)
     setEditDateTime(toDateTimeLocal(toDate(location.createdAt)))
+    setEditKeepSpot(true)
   }
 
   const closeEdit = () => {
@@ -179,14 +182,30 @@ const HistoryView = () => {
       ? toDate(editingLocation.createdAt).getTime()
       : NaN
 
-  // Whether the picked city, travel mode or time differs from the original.
+  // The exact spot stays unless it's removed, or the city changes to one far
+  // from it. (While a new city is being typed, nothing is decided yet.)
+  const editSpot = editingLocation?.spot
+  const editSpotFits =
+    !editSpot ||
+    !editCity ||
+    kmBetween(
+      editSpot.latitude,
+      editSpot.longitude,
+      editCity.latitude,
+      editCity.longitude
+    ) <= NEARBY_RADIUS_KM
+  const editSpotRemoved = !!editSpot && !(editKeepSpot && editSpotFits)
+
+  // Whether the picked city, travel mode, time or exact spot differs from the
+  // original.
   const editChanged = !!(
     editCity &&
     editingLocation &&
     (editCity.city !== editingLocation.city ||
       editCity.country !== editingLocation.country ||
       editMode !== (editingLocation.travelMode ?? DEFAULT_TRAVEL_MODE) ||
-      editTimeChanged)
+      editTimeChanged ||
+      editSpotRemoved)
   )
 
   // Block saving if the picked city matches the entry right before or after
@@ -221,6 +240,7 @@ const HistoryView = () => {
       travelMode: editMode,
       ...placeFields(editCity),
       ...(editTimeChanged ? { createdAt: new Date(editDateTime) } : {}),
+      ...(editSpotRemoved && { spot: null }),
     }
     try {
       await updateLocationInFirestore({
@@ -357,6 +377,11 @@ const HistoryView = () => {
                                     upcoming
                                   </span>
                                 )}
+                                {location.spot && (
+                                  <span className="badge badge-outline badge-sm ml-2">
+                                    exact spot
+                                  </span>
+                                )}
                               </div>
                             </div>
                             {isOwn && location.id && (
@@ -442,6 +467,26 @@ const HistoryView = () => {
                 />
               </label>
               <TravelModePicker value={editMode} onChange={setEditMode} />
+              {editingLocation.spot && (
+                <label className="flex w-fit cursor-pointer items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    className="toggle toggle-sm"
+                    checked={!editSpotRemoved}
+                    disabled={!editSpotFits}
+                    onChange={(e) => setEditKeepSpot(e.target.checked)}
+                  />
+                  <span>
+                    Show my exact spot on the map
+                    {!editSpotFits && (
+                      <span className="opacity-60">
+                        {' '}
+                        · removed, it&apos;s far from this city
+                      </span>
+                    )}
+                  </span>
+                </label>
+              )}
             </div>
           )}
           {matchesAdjacent && (

@@ -13,7 +13,11 @@ import { formatDate, formatTime } from '@/lib/dates'
 import { useLocations } from '@/lib/LocationContext'
 import { pastLocations } from '@/lib/locations'
 import { shortName } from '@/lib/names'
+import { pinOf } from '@/lib/spot'
 import { travelIcon, travelImage, TravelMode } from '@/lib/travel'
+
+// Street level, for a pin on someone's exact spot.
+const SPOT_ZOOM = 16
 
 // Function to create custom icon from user's photo URL
 const createUserIcon = (photoURL: string | null) => {
@@ -57,6 +61,13 @@ const LocationMarker = () => {
     now
   )[0]
 
+  // Zoomed in to street level when the pin is on your exact spot.
+  const flyToMyLocation = () => {
+    if (!myLocation) return
+    const pin = pinOf(myLocation)
+    map.flyTo([pin.latitude, pin.longitude], myLocation.spot ? SPOT_ZOOM : 5)
+  }
+
   // Fly to the user's pin whenever flySignal is bumped (e.g. after logging a
   // new location). Skip the initial mount so it only fires on real requests.
   useEffect(() => {
@@ -64,19 +75,13 @@ const LocationMarker = () => {
       didMount.current = true
       return
     }
-    if (myLocation) {
-      map.flyTo([myLocation.latitude, myLocation.longitude], 5)
-    }
+    flyToMyLocation()
     // Only react to flySignal changes, not to every location/map update.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [flySignal])
 
   // Nothing to fly to — hide the button entirely.
   if (!myLocation) return null
-
-  const flyToMyLocation = () => {
-    map.flyTo([myLocation.latitude, myLocation.longitude], 5)
-  }
 
   return (
     <button
@@ -95,6 +100,8 @@ type BaseMarker = {
   photoURL: string | null
   lat: number
   lng: number
+  // On the user's exact spot, not the city.
+  exact: boolean
   city: string
   country: string
   createdAt: Date
@@ -126,13 +133,15 @@ const UserMarkers = ({ hiddenUserId }: { hiddenUserId: string | null }) => {
     if (u.userId === hiddenUserId) continue
     const loc = pastLocations(u.locations ?? [], now)[0]
     if (!loc) continue
+    const pin = pinOf(loc)
     base.push({
       userId: u.userId,
       userName: u.userName,
       customName: u.customName ?? null,
       photoURL: u.photoURL,
-      lat: loc.latitude,
-      lng: loc.longitude,
+      lat: pin.latitude,
+      lng: pin.longitude,
+      exact: !!loc.spot,
       city: loc.city,
       country: loc.country,
       createdAt:
@@ -140,7 +149,8 @@ const UserMarkers = ({ hiddenUserId }: { hiddenUserId: string | null }) => {
     })
   }
 
-  // Group users that share (rounded) coordinates — i.e. the same city.
+  // Group users that share (rounded) coordinates — i.e. the same city, or the
+  // same exact spot.
   // (Plain object, not a Map — the component is named `Map` and shadows it.)
   const groups: Record<string, BaseMarker[]> = {}
   for (const m of base) {
@@ -191,6 +201,15 @@ const UserMarkers = ({ hiddenUserId }: { hiddenUserId: string | null }) => {
               <div>
                 {m.city}, {m.country}
               </div>
+              {m.exact && (
+                <button
+                  type="button"
+                  className="link text-xs"
+                  onClick={() => map.flyTo([m.lat, m.lng], SPOT_ZOOM)}
+                >
+                  📍 Exact spot · zoom in
+                </button>
+              )}
               <div className="text-xs text-gray-500">
                 Last seen: {formatDate(m.createdAt)}, {formatTime(m.createdAt)}
               </div>
