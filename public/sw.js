@@ -2,8 +2,11 @@
    - Same-origin app shell (pages + static assets).
    - Images (cross-origin too): Google avatars and OpenStreetMap tiles you've
      already viewed, so they show offline. Firestore and other cross-origin
-     requests are left untouched (Firestore has its own IndexedDB cache). */
-const SHELL_CACHE = 'elektricky-shell-v1'
+     requests are left untouched (Firestore has its own IndexedDB cache).
+   - Next.js's own page requests (switching pages inside the app) are left
+     untouched too: Next.js keeps them itself (see next.config.ts). */
+// v2: v1 also held Next.js page requests, which after a deploy reloaded the app.
+const SHELL_CACHE = 'elektricky-shell-v2'
 const IMAGE_CACHE = 'elektricky-img-v1'
 const KEEP = [SHELL_CACHE, IMAGE_CACHE]
 
@@ -54,6 +57,11 @@ self.addEventListener('fetch', (event) => {
 
   // Anything else cross-origin (e.g. Firestore) — don't intercept.
   if (new URL(request.url).origin !== self.location.origin) return
+
+  // Next.js page requests (the RSC header) — don't intercept. A copy saved
+  // here would come from the version deployed back then, and Next.js answers
+  // a copy from another version by reloading the whole app.
+  if (request.headers.has('RSC')) return
 
   // Navigations: network-first (stay fresh), fall back to cache when offline.
   if (request.mode === 'navigate') {
