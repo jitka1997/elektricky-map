@@ -17,7 +17,12 @@ import {
   useState,
 } from 'react'
 
-import { auth, checkUserAccess, writeUserToFirestore } from '@/lib/firebase'
+import {
+  auth,
+  checkUserAccess,
+  wasLetInBefore,
+  writeUserToFirestore,
+} from '@/lib/firebase'
 
 interface AuthContextType {
   user: User | null
@@ -44,6 +49,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setAuthorized(null)
         setLoading(false)
         return
+      }
+
+      // Someone who was let in on this device before gets in right away: on a
+      // slow connection, waiting for the server check below kept the whole
+      // app behind a spinner for seconds. That check still runs, and still
+      // locks out anyone who's no longer on the guest list.
+      if (await wasLetInBefore(user.uid)) {
+        setAuthorized(true)
+        setLoading(false)
       }
 
       // Check invite-allowlist membership with a READ of the user's own doc.

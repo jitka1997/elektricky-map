@@ -8,6 +8,7 @@ import {
   deleteField,
   doc,
   getDoc,
+  getDocFromCache,
   getDocs,
   getFirestore,
   initializeFirestore,
@@ -66,6 +67,17 @@ const db =
 // offline, it resolves from the local cache for returning (invited) users.
 const checkUserAccess = async (userId: string) => {
   await getDoc(doc(db, 'users', userId))
+}
+
+// Whether this device already has the user's own doc saved, i.e. they were let
+// in here before (only invited users can read it). Answers without the network.
+const wasLetInBefore = async (userId: string) => {
+  try {
+    await getDocFromCache(doc(db, 'users', userId))
+    return true
+  } catch {
+    return false
+  }
 }
 
 type UserEntry = {
@@ -389,6 +401,7 @@ export {
   subscribeToAllLocations,
   updateLocationInFirestore,
   updateUserProfile,
+  wasLetInBefore,
   writeLocationToFirestore,
   writeUserToFirestore,
 }
