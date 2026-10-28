@@ -1,7 +1,7 @@
 'use client'
 
 import Image from 'next/image'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
 import { useEffect, useState } from 'react'
 
 import { useAuth } from '@/lib/AuthContext'
@@ -9,12 +9,15 @@ import { useLocations } from '@/lib/LocationContext'
 import { pastLocations } from '@/lib/locations'
 import { checkIn } from '@/lib/push'
 
+// Closing only drops ?checkin=1 from the URL, so the browser's history is
+// enough (Next.js follows it); the router can wait on the server first.
+const close = () => window.history.replaceState(null, '', '/')
+
 // Opened by tapping a check-in reminder (it links to /?checkin=1): "Still in
 // Brno?" with "Yes, still here" (restarts the reminder clock without a
 // duplicate entry) or "I moved" (closes and puts you in the city search).
 const CheckInPrompt = () => {
   const searchParams = useSearchParams()
-  const router = useRouter()
   const { user } = useAuth()
   const { locationData, isLoading, now } = useLocations()
   const [busy, setBusy] = useState(false)
@@ -25,17 +28,15 @@ const CheckInPrompt = () => {
   const city = me ? pastLocations(me.locations, now)[0]?.city : undefined
   const open = searchParams.get('checkin') === '1' && !isLoading && !!city
 
-  const close = () => router.replace('/', { scroll: false })
-
   // Escape closes it, like tapping outside.
   useEffect(() => {
     if (!open) return
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') router.replace('/', { scroll: false })
+      if (e.key === 'Escape') close()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [open, router])
+  }, [open])
 
   if (!open) return null
 

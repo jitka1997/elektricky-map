@@ -1,6 +1,6 @@
 'use client'
 
-import { usePathname, useRouter, useSearchParams } from 'next/navigation'
+import { usePathname, useSearchParams } from 'next/navigation'
 
 import type { Period } from '@/lib/stats'
 
@@ -73,17 +73,22 @@ export const statsQuery = (
  * The stats view from the URL, plus `update` to change it. `push` adds a
  * browser history step (Back returns to the previous view); `replace` changes
  * the URL in place, for small switches you wouldn't want to step back through.
+ * Only the URL changes, so this uses the browser's history (Next.js follows
+ * it) rather than the router, which can wait on the server first.
  */
 export const useStatsView = () => {
   const searchParams = useSearchParams()
-  const router = useRouter()
   const pathname = usePathname()
   const params = new URLSearchParams(searchParams.toString())
 
   const update = (
     changes: Partial<Record<Key, string | null>>,
     how: 'push' | 'replace' = 'replace'
-  ) => router[how](pathname + statsQuery(params, changes), { scroll: false })
+  ) => {
+    const url = pathname + statsQuery(params, changes)
+    if (how === 'push') window.history.pushState(null, '', url)
+    else window.history.replaceState(null, '', url)
+  }
 
   return { view: readStatsView(params), params, update }
 }

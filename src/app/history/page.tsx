@@ -81,8 +81,14 @@ const HistoryView = () => {
     if (next.size) params.set('open', [...next].join(','))
     else params.delete('open')
     const query = params.toString()
-    // Replace, not push: opening a card isn't a step you'd go Back through.
-    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false })
+    // Only the URL changes, so the browser's history is enough (Next.js
+    // follows it); the router can wait on the server first. Replace, not
+    // push: opening a card isn't a step you'd go Back through.
+    window.history.replaceState(
+      null,
+      '',
+      query ? `${pathname}?${query}` : pathname
+    )
   }
 
   const confirmDelete = async () => {
